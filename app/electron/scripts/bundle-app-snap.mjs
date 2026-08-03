@@ -38,7 +38,11 @@ async function createSnapImage(blinkDeploymentTemporaryDirectory, blinkDeploymen
     try {
         await run('sudo snapcraft pack --destructive-mode', blinkDeploymentOutputDirectory);
         await run(`sudo mv ${pkgConfig.name}*.snap ${snapfile}`, blinkDeploymentOutputDirectory);
-        await run('snapcraft upload *.snap --release=edge', blinkDeploymentOutputDirectory);
+        if (process.env.SNAPCRAFT_STORE_CREDENTIALS) {
+            await run('snapcraft upload *.snap --release=edge', blinkDeploymentOutputDirectory);
+        } else {
+            console.log('Skipping Snap Store upload: SNAPCRAFT_STORE_CREDENTIALS is not configured. The local .snap file was still built.');
+        }
     } finally {
         fs.unlink(yaml);
     }
