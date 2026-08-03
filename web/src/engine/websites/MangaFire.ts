@@ -1,6 +1,6 @@
 import { Tags } from '../Tags';
 import icon from './MangaFire.webp';
-import { FetchJSON } from '../platform/FetchProvider';
+import { FetchJSON, FetchWindowScript } from '../platform/FetchProvider';
 import { DecoratableMangaScraper, Manga, Chapter, Page, type MangaPlugin } from '../providers/MangaPlugin';
 import * as Common from './decorators/Common';
 
@@ -13,19 +13,7 @@ type APIManga = {
     title: string;
 };
 
-type APIChapter = {
-    id: number;
-    number: number;
-    name: string;
-    language: string;
-    type: string;
-    pages: {
-        url: string;
-    }[];
-};
-
 type APIMangas = APIResults<APIManga>;
-type APIChapters = APIResults<APIChapter>;
 
 const chapterLanguageMap = new Map([
     ['en', Tags.Language.English],
@@ -70,17 +58,54 @@ export default class extends DecoratableMangaScraper {
     }
 
     public override async FetchChapters(manga: Manga): Promise<Chapter[]> {
-        return Array.fromAsync(async function* () {
-            for (let page = 1, run = true; run; page++) {
-                const { items } = await FetchJSON<APIChapters>(new Request(new URL(`./titles/${manga.Identifier}/chapters?sort=number&order=desc&page=${page}&limit=200`, this.apiURL)));
-                const chapters = items.map(({ id, language, name, number, type }) => new Chapter(this, manga, `${id}`, [`Ch. ${number}`, name, `(${type})`, `(${language})`].joinTitleSegments(), ...[chapterLanguageMap.get(language)].filter(Boolean)));
-                chapters.length > 0 ? yield* chapters : run = false ;
-            }
-        }.call(this));
+        type Row = { id: string; text: string; language: string };
+        const rows = await FetchWindowScript<Row[]>(new Request(new URL(`./title/${manga.Identifier}`, this.URI)), `
+            new Promise(resolve => {
+                const extract = () => [...document.querySelectorAll('a[href*="/chapter/"]')].map(link => {
+                    const id = (link.href.match(/\\/chapter\\/(\\d+)/) ?? [])[1];
+                    const text = link.textContent?.replace(/\\s+/g, ' ')?.trim() ?? '';
+                    const language = link.closest('.title-detail_row')?.querySelector('.title-detail_row-flag')?.title ?? 'en';
+                    return { id, text, language };
+                }).filter(row => row.id);
+                const start = Date.now();
+                const poll = () => {
+                    const rows = extract();
+                    if (rows.length > 0 || Date.now() - start > 8000) {
+                        resolve(rows);
+                    } else {
+                        setTimeout(poll, 400);
+                    }
+                };
+                poll();
+            })
+        `, 200);
+        return rows.map(({ id, text, language }) => {
+            const match = text.match(/^(Ch\.?\s*\d+(?:\.\d+)?)\s*(.*)$/i);
+            const [ number, name ] = match ? [ match[1], match[2] ] : [ text, '' ];
+            return new Chapter(this, manga, id, [number, name].joinTitleSegments(), ...[chapterLanguageMap.get(language)].filter(Boolean));
+        });
     }
 
     public override async FetchPages(chapter: Chapter): Promise<Page[]> {
-        const { data: { pages } } = await FetchJSON<{ data: APIChapter }>(new Request(new URL(`./chapters/${chapter.Identifier}`, this.apiURL)));
-        return pages.map(({ url }) => new Page(this, chapter, new URL(url), { Referer: this.URI.href }));
+        const urls = await FetchWindowScript<string[]>(new Request(new URL(`./title/${chapter.Parent.Identifier}/chapter/${chapter.Identifier}`, this.URI)), `
+            new Promise(resolve => {
+                const extract = () => [...new Set(
+                    [...document.querySelectorAll('img[src*="/manga/"], img[data-src*="/manga/"], .reader img, [class*="reader"] img, [class*="page"] img')]
+                        .map(img => img.currentSrc || img.src || img.dataset.src)
+                        .filter(src => src && !src.startsWith('data:'))
+                )];
+                const start = Date.now();
+                const poll = () => {
+                    const urls = extract();
+                    if (urls.length > 0 || Date.now() - start > 8000) {
+                        resolve(urls);
+                    } else {
+                        setTimeout(poll, 400);
+                    }
+                };
+                poll();
+            })
+        `, 200);
+        return urls.map(url => new Page(this, chapter, new URL(url), { Referer: this.URI.href }));
     }
 }
