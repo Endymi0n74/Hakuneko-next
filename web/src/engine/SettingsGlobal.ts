@@ -111,6 +111,12 @@ export async function Initialize(settingsManager: SettingsManager, frontends: IF
             R.Settings_NewContent_CheckInfo,
             false
         ),
+        new Numeric(
+            Key.CheckNewContentPeriod,
+            R.Settings_NewContent_CheckPeriod,
+            R.Settings_NewContent_CheckPeriodInfo,
+            60, 5, 1440
+        ),
         new Check(
             Key.AutoDownloadNewContent,
             R.Settings_NewContent_AutoDownload,
