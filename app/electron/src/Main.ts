@@ -1,6 +1,6 @@
 import path from 'path';
 import fs from 'fs/promises';
-import { app } from 'electron';
+import { app, shell } from 'electron';
 import { Command } from 'commander';
 import { IPC } from './ipc/InterProcessCommunication';
 import { ApplicationWindow } from './ipc/ApplicationWindow';
@@ -11,7 +11,20 @@ import { RemoteBrowserWindowController } from './ipc/RemoteBrowserWindow';
 import { RPCServer } from '../../src/rpc/Server';
 import { RemoteProcedureCallManager } from './ipc/RemoteProcedureCallManager';
 import { RemoteProcedureCallContract } from './ipc/RemoteProcedureCallContract';
+import { LoadWindowState, TrackWindowState } from './WindowState';
 process.env['ELECTRON_DISABLE_SECURITY_WARNINGS'] = 'true';
+
+/**
+ * Only allow navigating away to http(s)/mailto targets, opened in the OS default browser.
+ * Anything else (e.g. custom schemes) is silently denied.
+ */
+function IsSafeExternalURL(url: string): boolean {
+    try {
+        return [ 'http:', 'https:', 'mailto:' ].includes(new URL(url).protocol);
+    } catch {
+        return false;
+    }
+}
 
 type CLIOptions = {
     origin?: string;
@@ -55,11 +68,14 @@ async function SetupUserDataDirectory(manifest: Manifest): Promise<void> {
 }
 
 async function CreateApplicationWindow(): Promise<ApplicationWindow> {
+    const savedState = await LoadWindowState();
     const win = new ApplicationWindow({
         show: false,
-        width: 1280,
-        height: 800,
-        center: true,
+        width: savedState.width ?? 1280,
+        height: savedState.height ?? 800,
+        minWidth: 760,
+        minHeight: 520,
+        ...Number.isFinite(savedState.x) && Number.isFinite(savedState.y) ? { x: savedState.x, y: savedState.y } : { center: true },
         frame: false,
         transparent: true,
         //icon: path.join(process.env.VITE_PUBLIC, 'electron-vite.svg'),
@@ -76,6 +92,16 @@ async function CreateApplicationWindow(): Promise<ApplicationWindow> {
     });
 
     win.setMenuBarVisibility(false);
+    win.webContents.setWindowOpenHandler(({ url }) => {
+        if (IsSafeExternalURL(url)) {
+            shell.openExternal(url).catch(error => console.warn(error));
+        }
+        return { action: 'deny' };
+    });
+    TrackWindowState(win);
+    if (savedState.maximized) {
+        win.maximize();
+    }
     win.on('closed', () => app.quit());
 
     return win;

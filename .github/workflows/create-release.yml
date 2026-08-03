@@ -1,6 +1,12 @@
 name: Create GitHub Release
 
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+    inputs:
+      prerelease:
+        description: 'Mark this release as a pre-release'
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -69,15 +75,24 @@ jobs:
     name: Publish Release
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout ${{ github.repository }} @ ${{ github.ref }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.ref }}
+          fetch-depth: 1
       - name: Setup Environment
         run: |
+          VERSION=$(node -p "require('./package.json').version")
           echo "RELEASE_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> $GITHUB_ENV
-          echo "RELEASE_TAG=$(date -u +"%y%m%dT%H%M")" >> $GITHUB_ENV
+          echo "RELEASE_TAG=v$VERSION" >> $GITHUB_ENV
+          echo "RELEASE_NAME=HakuNeko v$VERSION" >> $GITHUB_ENV
       - name: Download Artifacts
         uses: actions/download-artifact@v4
       - name: Create Release Description
         run: |
           DESCRIPTION=$(cat ./release-templates/pre-release.md | jq -sR | sed s/{TAG}/$RELEASE_TAG/g)
+          DESCRIPTION=$(echo $DESCRIPTION | sed s#manga-download/haruneko#${{ github.repository }}#g)
           DESCRIPTION=$(echo $DESCRIPTION | sed s/{WIN_X64_ZIP}/$(ls ./bundle-electron-* | grep 'x64.zip')/g)
           DESCRIPTION=$(echo $DESCRIPTION | sed s/{WIN_X32_ZIP}/$(ls ./bundle-electron-* | grep 'ia32.zip')/g)
           DESCRIPTION=$(echo $DESCRIPTION | sed s/{MACOS_X64_DMG}/$(ls ./bundle-electron-* | grep 'x64.dmg')/g)
@@ -87,9 +102,9 @@ jobs:
       - name: Create Release Tag
         run: |
           echo { > ./body.json
-          echo \"prerelease\":true, >> ./body.json
+          echo \"prerelease\":${{ inputs.prerelease }}, >> ./body.json
           echo \"tag_name\":\"$RELEASE_TAG\", >> ./body.json
-          echo \"name\":\"canary • $RELEASE_DATE\", >> ./body.json
+          echo \"name\":\"$RELEASE_NAME\", >> ./body.json
           echo \"body\":$(cat ./release-templates/description.md) >> ./body.json
           echo } >> ./body.json
           echo +++ REQUEST +++

@@ -22,6 +22,14 @@ export function InitializeMenu() {
         role: 'viewMenu',
         submenu: [
             { role: 'toggleDevTools', accelerator: 'F12' },
+            { role: 'reload', accelerator: 'CmdOrCtrl+R' },
+            { role: 'forceReload', accelerator: 'CmdOrCtrl+Shift+R' },
+            { type: 'separator' },
+            { role: 'resetZoom', accelerator: 'CmdOrCtrl+0' },
+            { role: 'zoomIn', accelerator: 'CmdOrCtrl+=' },
+            { role: 'zoomOut', accelerator: 'CmdOrCtrl+-' },
+            { type: 'separator' },
+            { role: 'togglefullscreen', accelerator: 'F11' },
         ]
     }));
     Menu.setApplicationMenu(menu);

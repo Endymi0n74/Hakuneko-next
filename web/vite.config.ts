@@ -1,9 +1,16 @@
+import { readFileSync } from 'node:fs';
 import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import react from '@vitejs/plugin-react';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 
 const buildID = Date.now().toString(36).toUpperCase();
+
+/**
+ * The application version, kept in sync across the whole monorepo via `npm run version:bump`.
+ * Exposed to the frontend as the {@link __APP_VERSION__} global constant (see `src/global.d.ts`).
+ */
+const appVersion = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8')).version ?? '0.0.0';
 
 /**
  * A key for the {@link sslCert}
@@ -64,6 +71,9 @@ iw==
 
 // https://vitejs.dev/config/
 export default defineConfig({
+    define: {
+        __APP_VERSION__: JSON.stringify(appVersion),
+    },
     plugins: [
         vue(),
         react(),

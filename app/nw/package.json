@@ -1,5 +1,6 @@
 {
     "name": "hakuneko-nw",
+    "version": "1.0.0",
     "title": "HakuNeko",
     "description": "Manga, Anime & Novel Downloader (NodeWebkit based desktop client)",
     "type": "module",

@@ -55,6 +55,14 @@ const styles = css`
         -webkit-app-region: drag;
     }
 
+    #version {
+        font-size: 10px;
+        font-weight: normal;
+        color: var(--colorNeutralForeground4);
+        margin-left: var(--spacingHorizontalXS);
+        -webkit-app-region: drag;
+    }
+
     #controls {
         display: flex;
     }
@@ -132,7 +140,7 @@ const template = html<TitleBar>`
             </fluent-menu-item>
         </fluent-menu-list>
     </fluent-menu>
-    <div id="title">${model => model.Localization.Locale.Frontend_Product_Title()}</div>
+    <div id="title">${model => model.Localization.Locale.Frontend_Product_Title()}<span id="version" title="${model => model.Localization.Locale.Frontend_FluentCore_Version_Description()}">v${() => __APP_VERSION__}</span></div>
     <div id="controls">
         ${model => model.SettingsManager.SettingSelectedTheme === ThemeWebLight ? buttonToggleDarkMode : buttonToggleLightMode}
         <fluent-button icon-only appearance="subtle" title="${model => model.Localization.Locale.Frontend_FluentCore_Window_ButtonMinimize_Description()}" :innerHTML=${() => IconMinimize} @click="${model => model.WindowManager.Minimize()}"></fluent-button>

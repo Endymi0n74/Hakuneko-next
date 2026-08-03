@@ -5,7 +5,7 @@ import { BookmarkPlugin } from './providers/BookmarkPlugin';
 import { ItemflagManager } from './ItemflagManager';
 import { CreateStorageController, type StorageController } from './StorageController';
 import { InteractiveFileContentProvider } from './InteractiveFileContentProvider';
-import { SettingsManager, type Check } from './SettingsManager';
+import { SettingsManager, type Check, type Numeric } from './SettingsManager';
 import { FeatureFlags } from './FeatureFlags';
 import { DownloadManager } from './DownloadManager';
 import { CreateBloatGuard } from './platform/BloatGuard';
@@ -45,7 +45,17 @@ export class HakuNeko {
         CreateRemoteProcedureCallContract();
         // Preload bookmarks flags to show content to view
         const checkNewContent = this.SettingsManager.OpenScope().Get<Check>(GlobalKey.CheckNewContent).Value ;
-        if (checkNewContent) this.BookmarkPlugin.RefreshAllFlags();
+        if (checkNewContent) {
+            this.BookmarkPlugin.RefreshAllFlags().then(async () => {
+                const autoDownloadNewContent = this.SettingsManager.OpenScope().Get<Check>(GlobalKey.AutoDownloadNewContent).Value;
+                if (autoDownloadNewContent) {
+                    const maxItemsPerBookmark = this.SettingsManager.OpenScope().Get<Numeric>(GlobalKey.AutoDownloadNewContentMaxItems).Value;
+                    const ignoreSpecials = this.SettingsManager.OpenScope().Get<Check>(GlobalKey.AutoDownloadIgnoreSpecials).Value;
+                    const delayMs = this.SettingsManager.OpenScope().Get<Numeric>(GlobalKey.AutoDownloadDelay).Value;
+                    await this.BookmarkPlugin.AutoDownloadNewContent(maxItemsPerBookmark, ignoreSpecials, delayMs);
+                }
+            }).catch(error => console.warn(error));
+        }
 
     }
 

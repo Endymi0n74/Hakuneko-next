@@ -1,11 +1,13 @@
 import type { PluginController } from '../PluginController';
-import { MediaContainer, type MediaChild } from './MediaPlugin';
+import { MediaContainer, type MediaChild, type StoreableMediaContainer, type MediaItem } from './MediaPlugin';
 import { type StorageController, Store } from '../StorageController';
 import type { InteractiveFileContentProvider } from '../InteractiveFileContentProvider';
 import { ConvertToSerializedBookmark } from '../transformers/BookmarkConverter';
 import { Bookmark, MissingWebsite, type BookmarkSerialized } from './Bookmark';
 import { MissingInfoTracker } from '../trackers/IMediaInfoTracker';
 import { NotImplementedError } from '../Error';
+import { FlagType } from '../ItemflagManager';
+import { Delay } from '../BackgroundTimers';
 
 export type BookmarkImportResult = {
     cancelled: boolean;
@@ -62,8 +64,54 @@ export class BookmarkPlugin extends MediaContainer<Bookmark> {
 
     public async RefreshAllFlags() {
         for (const media of super.Entries.Value) {
-            await media.Update();
-            HakuNeko.ItemflagManager.LoadContainerFlags(media);
+            try {
+                await media.Update();
+                HakuNeko.ItemflagManager.LoadContainerFlags(media);
+            } catch (error) {
+            // Do not let a single broken/blocked bookmark (e.g. region-locked website) interrupt the others
+                console.warn(error);
+            }
+        }
+    }
+
+    /**
+     * Matches chapter titles that are commonly used for bonus/side content rather than the main story,
+     * mirroring the heuristic used by the previous HakuMangaPlus auto-download layer.
+     */
+    private static readonly SpecialChapterPattern = /(special|extra|bonus|omake|hors[ -]?série|side story)/i;
+
+    /**
+     * Enqueue newly detected chapters (i.e. entries that are not yet flagged as read/current)
+     * of every bookmark for download, and mark the queued ones as viewed so they are not queued again.
+     * Chapters that are skipped (e.g. filtered out as "special") are left unflagged, so they remain
+     * available for a manual download and are simply reconsidered - and skipped again - on the next run.
+     * Intended to be called after {@link RefreshAllFlags} so bookmark entries and flags are up to date.
+     * @param maxItemsPerBookmark - Maximum amount of new chapters to queue per bookmark on this run (0 = unlimited).
+     * @param ignoreSpecials - When true, chapters whose title looks like bonus/special content are skipped.
+     * @param delayMs - Delay to wait between each chapter that gets queued, to avoid hammering the website.
+     */
+    public async AutoDownloadNewContent(maxItemsPerBookmark = 0, ignoreSpecials = true, delayMs = 0): Promise<void> {
+        for (const bookmark of super.Entries.Value) {
+            try {
+                let newEntries = await bookmark.GetUnflaggedContent();
+                if (ignoreSpecials) {
+                    newEntries = newEntries.filter(entry => !BookmarkPlugin.SpecialChapterPattern.test(entry.Title));
+                }
+                if (newEntries.length === 0) {
+                    continue;
+                }
+                const toDownload = (maxItemsPerBookmark > 0 ? newEntries.slice(0, maxItemsPerBookmark) : newEntries) as StoreableMediaContainer<MediaItem>[];
+                for (const entry of toDownload) {
+                    await HakuNeko.DownloadManager.Enqueue(entry);
+                    await HakuNeko.ItemflagManager.FlagItem(entry, FlagType.Viewed);
+                    if (delayMs > 0) {
+                        await Delay(delayMs);
+                    }
+                }
+            } catch (error) {
+                // Do not let a single broken bookmark (e.g. missing website) interrupt the others
+                console.warn(error);
+            }
         }
     }
 

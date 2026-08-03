@@ -20,6 +20,10 @@ export const enum Key {
     CheckNewContent = 'check-new-content',
     CheckNewContentPeriod = 'check-new-content-period',
     NotifyNewContent = 'notify-new-content',
+    AutoDownloadNewContent = 'auto-download-new-content',
+    AutoDownloadNewContentMaxItems = 'auto-download-new-content-max-items',
+    AutoDownloadIgnoreSpecials = 'auto-download-ignore-specials',
+    AutoDownloadDelay = 'auto-download-delay',
     RPCEnabled = 'RPCEnabled',
     RPCPort = 'RPCPort',
     RPCSecret = 'RPCSecret',
@@ -106,6 +110,30 @@ export async function Initialize(settingsManager: SettingsManager, frontends: IF
             R.Settings_NewContent_Check,
             R.Settings_NewContent_CheckInfo,
             false
+        ),
+        new Check(
+            Key.AutoDownloadNewContent,
+            R.Settings_NewContent_AutoDownload,
+            R.Settings_NewContent_AutoDownloadInfo,
+            false
+        ),
+        new Numeric(
+            Key.AutoDownloadNewContentMaxItems,
+            R.Settings_NewContent_AutoDownloadMaxItems,
+            R.Settings_NewContent_AutoDownloadMaxItemsInfo,
+            0, 0, 100
+        ),
+        new Check(
+            Key.AutoDownloadIgnoreSpecials,
+            R.Settings_NewContent_AutoDownloadIgnoreSpecials,
+            R.Settings_NewContent_AutoDownloadIgnoreSpecialsInfo,
+            true
+        ),
+        new Numeric(
+            Key.AutoDownloadDelay,
+            R.Settings_NewContent_AutoDownloadDelay,
+            R.Settings_NewContent_AutoDownloadDelayInfo,
+            1500, 0, 10000
         ),
         new Check(
             Key.RPCEnabled,
