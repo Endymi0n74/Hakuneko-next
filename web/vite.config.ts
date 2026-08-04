@@ -1,25 +1,35 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import react from '@vitejs/plugin-react';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 
-const buildID = Date.now().toString(36).toUpperCase();
+const buildID = Date.now()
+    .toString(36)
+    .toUpperCase();
 
 /**
- * The application version, kept in sync across the whole monorepo via `npm run version:bump`.
- * Exposed to the frontend as the {@link __APP_VERSION__} global constant (see `src/global.d.ts`).
+ * The application version, kept in sync across the whole monorepo
+ * via `npm run version:bump`.
  */
-const appVersion = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8')).version ?? '0.0.0';
-
-import { fileURLToPath } from 'node:url';
-
-// ...
+const appVersion = JSON.parse(
+    readFileSync(
+        new URL('./package.json', import.meta.url),
+        'utf-8'
+    )
+).version ?? '0.0.0';
 
 /**
- * Absolute path to the fast-element di.js file, used to work around a Rolldown
- * resolver bug that fails to resolve this scoped package's subpath export.
+ * Electron loads the bundled web application through file://.
+ * Relative paths are therefore required for scripts and styles.
+ */
+const isElectronBuild = process.env.BUILD_TARGET === 'electron';
+
+/**
+ * Absolute path to fast-element's di.js file.
+ * This works around the Rolldown resolver issue with this subpath export.
  */
 const fastElementDiPath = path.resolve(
     fileURLToPath(new URL('.', import.meta.url)),
@@ -27,7 +37,7 @@ const fastElementDiPath = path.resolve(
 );
 
 /**
- * A key for the {@link sslCert}
+ * Private key used by the local HTTPS development server.
  */
 const sslKey = `-----BEGIN PRIVATE KEY-----
 MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC4L/K8cjYxOONA
@@ -59,7 +69,7 @@ EcUoTUPkVjUCL2jKN+bKG78=
 -----END PRIVATE KEY-----`;
 
 /**
- * A self-signed certificate for localhost
+ * Self-signed certificate used by the local HTTPS development server.
  */
 const sslCert = `-----BEGIN CERTIFICATE-----
 MIIDXTCCAkWgAwIBAgIUZQZMfKIp28NP8facAMaSw+jSVcwwDQYJKoZIhvcNAQEL
@@ -83,88 +93,128 @@ iWxS8F+IcaleGLf8SvNwqz+SikcANDbtOUagrPiA1YG/BraQBLMA7kbkmLel9sjT
 iw==
 -----END CERTIFICATE-----`;
 
-// https://vitejs.dev/config/
 export default defineConfig({
-    base: process.env.VITE_BASE_PATH ?? '/',
+    /**
+     * Browser build:
+     *   /
+     *
+     * Packaged Electron build:
+     *   ./
+     */
+    base: isElectronBuild
+        ? './'
+        : (process.env.VITE_BASE_PATH ?? '/'),
+
+    define: {
+        __APP_VERSION__: JSON.stringify(appVersion)
+    },
+
     plugins: [
         vue(),
         react(),
         svelte({
-            onwarn: function(warning, handler) {
-                return warning.code.startsWith('a11y-') ? undefined : handler?.call(this, warning);
+            onwarn(warning, handler) {
+                return warning.code.startsWith('a11y-')
+                    ? undefined
+                    : handler?.call(this, warning);
             }
-        }),
+        })
     ],
+
     publicDir: 'static',
+
     resolve: {
         alias: {
-            '@microsoft/fast-element/di.js': fastElementDiPath,
-        },
+            '@microsoft/fast-element/di.js': fastElementDiPath
+        }
     },
+
     build: {
         sourcemap: false,
         outDir: 'build',
         chunkSizeWarningLimit: 2 * 1024,
+
         rolldownOptions: {
             input: {
                 index: './index.html',
-                sw: './src/service-worker.ts',
+                sw: './src/service-worker.ts'
             },
+
             resolve: {
                 alias: {
-                    '@microsoft/fast-element/di.js': fastElementDiPath,
-                },
+                    '@microsoft/fast-element/di.js': fastElementDiPath
+                }
             },
+
             output: {
-                entryFileNames: file => file.name === 'sw' ? '[name].js' : `${buildID}/[name].js`,
+                entryFileNames: file => {
+                    return file.name === 'sw'
+                        ? '[name].js'
+                        : `${buildID}/[name].js`;
+                },
+
                 assetFileNames: `${buildID}/[name].[ext]`,
                 chunkFileNames: `${buildID}/[name].js`,
-                manualChunks: (id) => {
+
+                manualChunks(id) {
                     if(id.includes('node_modules')) {
                         return 'Vendor';
                     }
-                    if(/\/web\/src\/engine\/websites\//.test(id) && /\/[a-zA-Z0-9_-]+\.webp$/.test(id)) {
+
+                    if(
+                        /\/web\/src\/engine\/websites\//.test(id)
+                        && /\/[a-zA-Z0-9_-]+\.webp$/.test(id)
+                    ) {
                         return 'WebsiteIcons';
                     }
+
+                    return undefined;
                 },
+
                 minify: {
                     compress: {
                         keepNames: {
                             class: true,
-                            function: true,
+                            function: true
                         }
                     },
+
                     mangle: {
-                        keepNames: true,
+                        keepNames: true
                     },
+
                     codegen: {
-                        removeWhitespace: true,
-                    },
+                        removeWhitespace: true
+                    }
                 }
-            },
-        },
+            }
+        }
     },
+
     worker: {
         rolldownOptions: {
             output: {
                 entryFileNames: `${buildID}/[name].js`,
                 assetFileNames: `${buildID}/[name].[ext]`,
-                chunkFileNames: `${buildID}/[name].js`,
+                chunkFileNames: `${buildID}/[name].js`
             }
         }
     },
+
     optimizeDeps: {
-        // TODO: once carbon-componenets-svelte v1 is released, check if svelte optimize has been improved
-        // carbon-components-svelte is large, prebundle
-        include: ['carbon-components-svelte'],
+        include: [
+            'carbon-components-svelte'
+        ]
     },
+
     server: {
         headers: {
             'Service-Worker-Allowed': '/'
         },
-        https:{
+
+        https: {
             key: sslKey,
-            cert: sslCert,
+            cert: sslCert
         }
     }
 });
