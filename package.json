@@ -1,37 +1,38 @@
 {
-    "name": "hakuneko",
-    "version": "1.0.0",
-    "title": "HakuNeko",
-    "description": "Manga, Anime & Novel Downloader",
-    "license": "Unlicense",
-    "homepage": "https://git.io/hakuneko",
-    "type": "module",
-    "workspaces": [
-        "web",
-        "app/nw",
-        "app/electron",
-        "docs"
-    ],
-    "devDependencies": {
-        "@stylistic/eslint-plugin": "5.10.0",
-        "@types/chrome": "0.2.0",
-        "@types/nw.js": "0.92.0",
-        "eslint": "10.6.0",
-        "eslint-plugin-tsdoc": "0.5.2",
-        "puppeteer-core": "25.2.1",
-        "tslib": "2.8.1",
-        "typescript": "6.0.3",
-        "typescript-eslint": "8.62.1",
-        "vite": "8.1.2",
-        "vitest": "4.1.9"
-    },
-    "scripts": {
-        "check": "npm run check --workspaces",
-        "test": "npm run test --workspaces",
-        "test:e2e": "npm run build --workspaces && vitest run --config=test/vitest.e2e.js",
-        "test:websites": "npm run build --workspaces && vitest run --config=test/vitest.websites.js",
-        "npm:clean-install": "npm install -g npm@latest && ((npm update --package-lock-only --allow-git=all && npm clean-install --allow-git=all) || (npm cache clean --force && npm update --package-lock-only --allow-git=all && npm clean-install --allow-git=all) || (npm cache clean --force && npm update --package-lock-only --allow-git=all && npm clean-install --allow-git=all))",
-        "postinstall": "npm --workspace=app/electron exec electron -- --no-sandbox --version",
-        "version:bump": "node scripts/version-bump.mjs"
-    }
+  "name": "hakuneko",
+  "version": "1.0.0",
+  "title": "HakuNeko",
+  "description": "Manga, Anime & Novel Downloader",
+  "license": "Unlicense",
+  "homepage": "https://git.io/hakuneko",
+  "type": "module",
+  "workspaces": [
+    "web",
+    "app/nw",
+    "app/electron",
+    "docs"
+  ],
+  "devDependencies": {
+    "@stylistic/eslint-plugin": "5.10.0",
+    "@types/chrome": "0.2.0",
+    "@types/nw.js": "0.92.0",
+    "cross-env": "^10.0.0",
+    "eslint": "10.6.0",
+    "eslint-plugin-tsdoc": "0.5.2",
+    "puppeteer-core": "25.2.1",
+    "tslib": "2.8.1",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.62.1",
+    "vite": "8.1.2",
+    "vitest": "4.1.9"
+  },
+  "scripts": {
+    "check": "npm run check --workspaces",
+    "test": "npm run test --workspaces",
+    "test:e2e": "npm run build --workspaces && vitest run --config=test/vitest.e2e.js",
+    "test:websites": "npm run build --workspaces && vitest run --config=test/vitest.websites.js",
+    "npm:clean-install": "npm ci --allow-git=all"
+    "postinstall": "npm --workspace=app/electron exec electron -- --no-sandbox --version",
+    "version:bump": "node scripts/version-bump.mjs"
+  }
 }

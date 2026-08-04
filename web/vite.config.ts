@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import react from '@vitejs/plugin-react';
@@ -11,6 +12,19 @@ const buildID = Date.now().toString(36).toUpperCase();
  * Exposed to the frontend as the {@link __APP_VERSION__} global constant (see `src/global.d.ts`).
  */
 const appVersion = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8')).version ?? '0.0.0';
+
+import { fileURLToPath } from 'node:url';
+
+// ...
+
+/**
+ * Absolute path to the fast-element di.js file, used to work around a Rolldown
+ * resolver bug that fails to resolve this scoped package's subpath export.
+ */
+const fastElementDiPath = path.resolve(
+    fileURLToPath(new URL('.', import.meta.url)),
+    '../node_modules/@microsoft/fast-element/dist/esm/di/di.js'
+);
 
 /**
  * A key for the {@link sslCert}
@@ -82,6 +96,11 @@ export default defineConfig({
         }),
     ],
     publicDir: 'static',
+    resolve: {
+        alias: {
+            '@microsoft/fast-element/di.js': fastElementDiPath,
+        },
+    },
     build: {
         sourcemap: false,
         outDir: 'build',
@@ -90,6 +109,11 @@ export default defineConfig({
             input: {
                 index: './index.html',
                 sw: './src/service-worker.ts',
+            },
+            resolve: {
+                alias: {
+                    '@microsoft/fast-element/di.js': fastElementDiPath,
+                },
             },
             output: {
                 entryFileNames: file => file.name === 'sw' ? '[name].js' : `${buildID}/[name].js`,
