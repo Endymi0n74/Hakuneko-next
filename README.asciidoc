@@ -1,4 +1,4 @@
-# HakuNeko Next Fork de Hakuneko
+# HakuNeko Next 
 
 > Modern desktop manga downloader with automatic chapter tracking.
 
