@@ -4,131 +4,255 @@ on:
   workflow_dispatch:
     inputs:
       prerelease:
-        description: 'Mark this release as a pre-release'
+        description: "Mark this release as a pre-release"
         type: boolean
+        required: false
         default: false
+
+permissions:
+  contents: write
 
 jobs:
   build:
-    strategy:
-      matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
     name: Build (${{ matrix.os }})
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - macos-latest
+          - ubuntu-latest
+
     runs-on: ${{ matrix.os }}
+
     env:
       SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+      NPM_CONFIG_ALLOW_GIT: all
+
     steps:
-      - name: Checkout ${{ github.repository }} @ ${{ github.ref }}
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository }}
           ref: ${{ github.ref }}
           fetch-depth: 1
+
       - name: Setup Snapcraft
         if: startsWith(matrix.os, 'ubuntu')
+        shell: bash
         run: |
-          sudo apt update
-          sudo apt install -y snapd
+          sudo apt-get update
+          sudo apt-get install -y snapd
           sudo systemctl start snapd
           sudo snap install snapcraft --classic
+
       - name: Install NodeJS
         uses: actions/setup-node@v4
         with:
           node-version: 22.22.x
-      - name: Install NPM Packages
+          cache: npm
+
+      - name: Show versions
+        shell: bash
+        run: |
+          node --version
+          npm --version
+
+      - name: Install NPM packages
         run: npm run npm:clean-install
-      - name: Build Application
+
+      - name: Build application
         run: npm run bundle --workspace app/nw --workspace app/electron
-      - name: Upload NW Builds
+
+      - name: Upload NW.js builds
         uses: actions/upload-artifact@v4
         with:
           name: bundle-nw-${{ matrix.os }}
           retention-days: 3
+          if-no-files-found: error
           path: app/nw/bundle/
-      - name: Upload Electron Builds
+
+      - name: Upload Electron builds
         uses: actions/upload-artifact@v4
         with:
           name: bundle-electron-${{ matrix.os }}
           retention-days: 3
+          if-no-files-found: error
           path: app/electron/bundle/
+
   release-notes:
-    needs: build
     name: Prepare Release Notes
+    needs: build
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout ${{ github.repository }} @ ${{ github.ref }}
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository }}
           ref: ${{ github.ref }}
           fetch-depth: 1
-      - name: Upload Release Templates
+
+      - name: Upload release templates
         uses: actions/upload-artifact@v4
         with:
           name: release-templates
           retention-days: 3
+          if-no-files-found: warn
           path: .github/RELEASE_TEMPLATE/*.md
+
   publish:
+    name: Publish Release
     needs:
       - build
       - release-notes
-    name: Publish Release
+
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
     steps:
-      - name: Checkout ${{ github.repository }} @ ${{ github.ref }}
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository }}
           ref: ${{ github.ref }}
           fetch-depth: 1
-      - name: Setup Environment
+
+      - name: Setup release environment
+        shell: bash
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          echo "RELEASE_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> $GITHUB_ENV
-          echo "RELEASE_TAG=v$VERSION" >> $GITHUB_ENV
-          echo "RELEASE_NAME=HakuNeko v$VERSION" >> $GITHUB_ENV
-      - name: Download Artifacts
+          VERSION="$(node -p "JSON.parse(require('fs').readFileSync('package.json', 'utf8')).version")"
+
+          echo "RELEASE_TAG=v${VERSION}" >> "$GITHUB_ENV"
+          echo "RELEASE_NAME=HakuNeko v${VERSION}" >> "$GITHUB_ENV"
+
+      - name: Download build artifacts
         uses: actions/download-artifact@v4
-      - name: Create Release Description
+        with:
+          path: artifacts
+
+      - name: Display downloaded artifacts
+        shell: bash
         run: |
-          DESCRIPTION=$(cat ./release-templates/pre-release.md | jq -sR | sed s/{TAG}/$RELEASE_TAG/g)
-          DESCRIPTION=$(echo $DESCRIPTION | sed s#manga-download/haruneko#${{ github.repository }}#g)
-          DESCRIPTION=$(echo $DESCRIPTION | sed s/{WIN_X64_ZIP}/$(ls ./bundle-electron-* | grep 'x64.zip')/g)
-          DESCRIPTION=$(echo $DESCRIPTION | sed s/{WIN_X32_ZIP}/$(ls ./bundle-electron-* | grep 'ia32.zip')/g)
-          DESCRIPTION=$(echo $DESCRIPTION | sed s/{MACOS_X64_DMG}/$(ls ./bundle-electron-* | grep 'x64.dmg')/g)
-          DESCRIPTION=$(echo $DESCRIPTION | sed s/{MACOS_ARM64_DMG}/$(ls ./bundle-electron-* | grep 'arm64.dmg')/g)
-          DESCRIPTION=$(echo $DESCRIPTION | sed s/{LINUX_X64_SNAP}/$(ls ./bundle-electron-* | grep 'x64.snap')/g)
-          echo -n $DESCRIPTION > ./release-templates/description.md
-      - name: Create Release Tag
+          echo "Downloaded artifacts:"
+          find artifacts -type f -print
+
+      - name: Create release description
+        shell: bash
         run: |
-          echo { > ./body.json
-          echo \"prerelease\":${{ inputs.prerelease }}, >> ./body.json
-          echo \"tag_name\":\"$RELEASE_TAG\", >> ./body.json
-          echo \"name\":\"$RELEASE_NAME\", >> ./body.json
-          echo \"body\":$(cat ./release-templates/description.md) >> ./body.json
-          echo } >> ./body.json
-          echo +++ REQUEST +++
-          cat ./body.json
-          echo -n "RELEASE_ID=" >> $GITHUB_ENV
-          curl \
-            -X POST \
-            -H 'Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' \
-            'https://api.github.com/repos/${{ github.repository }}/releases' \
-            --data @./body.json \
-            --silent > ./response.json
-          echo +++ RESPONSE +++
-          cat ./response.json
-          cat ./response.json | grep '"upload_url"' | cut -d'/' -f8 >> $GITHUB_ENV
-          rm body.json response.json
-      - name: Upload Release Assets
+          TEMPLATE="artifacts/release-templates/pre-release.md"
+          DESCRIPTION="release-description.md"
+
+          if [ -f "$TEMPLATE" ]; then
+            cp "$TEMPLATE" "$DESCRIPTION"
+          else
+            cat > "$DESCRIPTION" <<EOF
+          # HakuNeko ${RELEASE_TAG}
+
+          Desktop application builds for Windows, macOS and Linux.
+          EOF
+          fi
+
+          find_asset() {
+            local pattern="$1"
+            find artifacts -type f -iname "$pattern" -printf '%f\n' | head -n 1
+          }
+
+          WIN_X64_ZIP="$(find_asset '*x64.zip')"
+          WIN_X32_ZIP="$(find_asset '*ia32.zip')"
+          MACOS_X64_DMG="$(find_asset '*x64.dmg')"
+          MACOS_ARM64_DMG="$(find_asset '*arm64.dmg')"
+          LINUX_X64_SNAP="$(find_asset '*x64.snap')"
+
+          sed -i \
+            -e "s|{TAG}|${RELEASE_TAG}|g" \
+            -e "s|manga-download/haruneko|${{ github.repository }}|g" \
+            -e "s|{WIN_X64_ZIP}|${WIN_X64_ZIP}|g" \
+            -e "s|{WIN_X32_ZIP}|${WIN_X32_ZIP}|g" \
+            -e "s|{MACOS_X64_DMG}|${MACOS_X64_DMG}|g" \
+            -e "s|{MACOS_ARM64_DMG}|${MACOS_ARM64_DMG}|g" \
+            -e "s|{LINUX_X64_SNAP}|${LINUX_X64_SNAP}|g" \
+            "$DESCRIPTION"
+
+          echo "Release description:"
+          cat "$DESCRIPTION"
+
+      - name: Create or update GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IS_PRERELEASE: ${{ inputs.prerelease }}
         run: |
-          for FILE in ./bundle-*/*.*; do \
-            curl \
-              -X POST \
-              -H 'Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' \
-              -H 'Content-Type: application/octet-stream' \
-              "https://uploads.github.com/repos/${{ github.repository }}/releases/${{ env.RELEASE_ID }}/assets?name=$(basename $FILE)" \
-              --data-binary @"$FILE" \
-              --silent \
-            && echo \
-          ; done
+          PRERELEASE_OPTION=""
+
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            PRERELEASE_OPTION="--prerelease"
+          fi
+
+          if gh release view "$RELEASE_TAG" \
+            --repo "${{ github.repository }}" \
+            >/dev/null 2>&1
+          then
+            echo "Release ${RELEASE_TAG} already exists. Updating it."
+
+            gh release edit "$RELEASE_TAG" \
+              --repo "${{ github.repository }}" \
+              --title "$RELEASE_NAME" \
+              --notes-file release-description.md
+          else
+            echo "Creating release ${RELEASE_TAG}."
+
+            gh release create "$RELEASE_TAG" \
+              --repo "${{ github.repository }}" \
+              --target "${{ github.sha }}" \
+              --title "$RELEASE_NAME" \
+              --notes-file release-description.md \
+              $PRERELEASE_OPTION
+          fi
+
+      - name: Upload release assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mapfile -d '' RELEASE_FILES < <(
+            find artifacts \
+              -type f \
+              ! -path '*/release-templates/*' \
+              \( \
+                -iname '*.zip' \
+                -o -iname '*.exe' \
+                -o -iname '*.dmg' \
+                -o -iname '*.snap' \
+                -o -iname '*.appimage' \
+                -o -iname '*.deb' \
+                -o -iname '*.rpm' \
+                -o -iname '*.tar.gz' \
+                -o -iname '*.7z' \
+              \) \
+              -print0
+          )
+
+          if [ "${#RELEASE_FILES[@]}" -eq 0 ]; then
+            echo "No release files were found."
+            exit 1
+          fi
+
+          printf 'Uploading %s release files:\n' "${#RELEASE_FILES[@]}"
+          printf '%s\n' "${RELEASE_FILES[@]}"
+
+          gh release upload "$RELEASE_TAG" \
+            "${RELEASE_FILES[@]}" \
+            --repo "${{ github.repository }}" \
+            --clobber
+
+      - name: Display published release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$RELEASE_TAG" \
+            --repo "${{ github.repository }}"
