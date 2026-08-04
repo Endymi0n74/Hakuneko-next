@@ -81,6 +81,29 @@ export class BookmarkPlugin extends MediaContainer<Bookmark> {
     private static readonly SpecialChapterPattern = /(special|extra|bonus|omake|hors[ -]?série|side story)/i;
 
     /**
+     * Mark every currently known chapter of every bookmark as already seen, without downloading
+     * anything. Meant as a one-time "catch up" before turning on {@link AutoDownloadNewContent},
+     * so only chapters published from now on are treated as new instead of the entire backlog.
+     * Call {@link RefreshAllFlags} first so bookmark entries are up to date.
+     */
+    public async CatchUpAllBookmarks(): Promise<void> {
+        for (const bookmark of super.Entries.Value) {
+            try {
+                const entries = await bookmark.GetUnflaggedContent();
+                for (const entry of entries) {
+                    await HakuNeko.ItemflagManager.FlagItem(entry, FlagType.Viewed);
+                }
+                if (entries.length > 0) {
+                    console.log(`[HakuNeko] Caught up "${bookmark.Title}": marked ${entries.length} chapter(s) as read`);
+                }
+            } catch (error) {
+                console.warn(error);
+            }
+        }
+        console.log('[HakuNeko] Catch-up complete.');
+    }
+
+    /**
      * Enqueue newly detected chapters (i.e. entries that are not yet flagged as read/current)
      * of every bookmark for download, and mark the queued ones as viewed so they are not queued again.
      * Chapters that are skipped (e.g. filtered out as "special") are left unflagged, so they remain
