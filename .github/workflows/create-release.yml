@@ -59,16 +59,29 @@ jobs:
       - name: Install NPM packages
         run: npm run npm:clean-install
 
-      # Le bundle NW.js Linux n'est actuellement pas généré par le projet.
       - name: Build NW.js application
         if: ${{ !startsWith(matrix.os, 'ubuntu') }}
         run: npm run bundle --workspace app/nw
+
+      - name: Detect NW.js builds
+        id: nw-builds
+        if: ${{ !startsWith(matrix.os, 'ubuntu') }}
+        shell: bash
+        run: |
+          if [ -d "app/nw/bundle" ] && [ -n "$(find app/nw/bundle -type f -print -quit)" ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            echo "NW.js builds found:"
+            find app/nw/bundle -type f -print
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "No NW.js build was generated for ${{ matrix.os }}."
+          fi
 
       - name: Build Electron application
         run: npm run bundle --workspace app/electron
 
       - name: Upload NW.js builds
-        if: ${{ !startsWith(matrix.os, 'ubuntu') }}
+        if: ${{ steps.nw-builds.outputs.found == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: bundle-nw-${{ matrix.os }}
