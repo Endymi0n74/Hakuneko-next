@@ -8,7 +8,7 @@
 ![Vibe Coding](https://img.shields.io/badge/development-vibe%20coding-ff8c42)
 ![License](https://img.shields.io/badge/license-Unlicense-green)
 
-Fork desktop de **HakuNeko Next** destiné au téléchargement et à la consultation de mangas, d'animes et de romans.
+Fork desktop de **HakuNeko** destiné au téléchargement et à la consultation de mangas, d'animes et de romans.
 
 Cette version met l'accent sur des applications de bureau autonomes avec Electron et NW.js, ainsi que sur la publication automatisée de releases Windows, macOS et Linux avec GitHub Actions.
 
