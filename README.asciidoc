@@ -2,14 +2,6 @@
 
 > Un fork communautaire de **HakuNeko** orienté application desktop, automatisation et nouvelles fonctionnalités.
 
-![Release](...)
-![Build](...)
-![Electron](...)
-![TypeScript](...)
-![Vite](...)
-![Licence](...)
-![Développement assisté par IA](...)
-
 ---
 
 ## 📸 Aperçu
