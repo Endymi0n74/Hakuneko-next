@@ -1,14 +1,6 @@
 # HakuNeko Next
 
-> Modern desktop manga, anime & novel downloader with automatic chapter tracking.
-
-[![Release](https://img.shields.io/github/v/release/Endymi0n74/Hakuneko-next?display_name=tag)](...)
-[![Build](https://github.com/Endymi0n74/Hakuneko-next/actions/workflows/create-release.yml/badge.svg)](...)
-![Electron](https://img.shields.io/badge/Electron-43-47848F?logo=electron)
-![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript)
-![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite)
-![License](https://img.shields.io/badge/license-Unlicense-green)
-![AI Assisted](https://img.shields.io/badge/AI-Assisted-blueviolet)
+> Modern desktop manga downloader with automatic chapter tracking.
 
 ---
 
