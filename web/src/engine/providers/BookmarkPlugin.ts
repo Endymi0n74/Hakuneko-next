@@ -68,7 +68,7 @@ export class BookmarkPlugin extends MediaContainer<Bookmark> {
                 await media.Update();
                 HakuNeko.ItemflagManager.LoadContainerFlags(media);
             } catch (error) {
-            // Do not let a single broken/blocked bookmark (e.g. region-locked website) interrupt the others
+                // Do not let a single broken/blocked bookmark (e.g. region-locked website) interrupt the others
                 console.warn(error);
             }
         }
@@ -101,6 +101,7 @@ export class BookmarkPlugin extends MediaContainer<Bookmark> {
                     continue;
                 }
                 const toDownload = (maxItemsPerBookmark > 0 ? newEntries.slice(0, maxItemsPerBookmark) : newEntries) as StoreableMediaContainer<MediaItem>[];
+                console.log(`[HakuNeko] Auto-download: "${bookmark.Title}" has ${newEntries.length} new chapter(s), queuing ${toDownload.length}`);
                 for (const entry of toDownload) {
                     await HakuNeko.DownloadManager.Enqueue(entry);
                     await HakuNeko.ItemflagManager.FlagItem(entry, FlagType.Viewed);

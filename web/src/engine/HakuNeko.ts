@@ -57,6 +57,7 @@ export class HakuNeko {
 
     async #PerformNewContentCheck(): Promise<void> {
         try {
+            console.log(`[HakuNeko] Checking ${this.BookmarkPlugin.Entries.Value.length} bookmark(s) for new content ...`);
             await this.BookmarkPlugin.RefreshAllFlags();
             const autoDownloadNewContent = this.SettingsManager.OpenScope().Get<Check>(GlobalKey.AutoDownloadNewContent).Value;
             if (autoDownloadNewContent) {
@@ -65,6 +66,7 @@ export class HakuNeko {
                 const delayMs = this.SettingsManager.OpenScope().Get<Numeric>(GlobalKey.AutoDownloadDelay).Value;
                 await this.BookmarkPlugin.AutoDownloadNewContent(maxItemsPerBookmark, ignoreSpecials, delayMs);
             }
+            console.log('[HakuNeko] New content check complete.');
         } catch (error) {
             console.warn(error);
         }

@@ -71,9 +71,7 @@ iw==
 
 // https://vitejs.dev/config/
 export default defineConfig({
-    define: {
-        __APP_VERSION__: JSON.stringify(appVersion),
-    },
+    base: process.env.VITE_BASE_PATH ?? '/',
     plugins: [
         vue(),
         react(),
