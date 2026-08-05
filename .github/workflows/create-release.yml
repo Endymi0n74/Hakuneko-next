@@ -67,11 +67,6 @@ jobs:
       - name: Install NPM packages
         run: npm run npm:clean-install
 
-      # NW.js reste uniquement généré sous Windows.
-      # La build macOS NW.js échoue actuellement dans le script DMG d'origine
-      # à cause du nom de volume contenant un espace ("HakuNeko Next").
-      # NW.js n'est pas publié dans la GitHub Release, donc il ne doit pas
-      # bloquer les builds Electron macOS/Linux.
       - name: Build NW.js application (Windows only)
         if: startsWith(matrix.os, 'windows')
         run: npm run bundle --workspace app/nw
@@ -129,54 +124,94 @@ jobs:
       - name: Normalize release asset names
         shell: bash
         run: |
+          set -u
+
           while IFS= read -r -d '' file; do
             directory="$(dirname "$file")"
             filename="$(basename "$file")"
 
-            case "$filename" in
-              *.tar.gz)
-                extension="tar.gz"
-                ;;
-              *)
-                extension="${filename##*.}"
-                ;;
-            esac
-
             case "$directory" in
               *macos-untested*)
-                architecture="$(echo "$filename" | grep -oE '(arm64|x64)' | tail -1)"
+                case "$filename" in
+                  *arm64*|*ARM64*)
+                    architecture="ARM64"
+                    ;;
+                  *x64*|*amd64*)
+                    architecture="x64"
+                    ;;
+                  *)
+                    echo "Skipping unrecognized macOS file: $file"
+                    continue
+                    ;;
+                esac
 
-                [ "$architecture" = "arm64" ] && architecture="ARM64"
-                [ -z "$architecture" ] && architecture="unknown"
+                case "$filename" in
+                  *.dmg)
+                    extension="dmg"
+                    ;;
+                  *)
+                    echo "Skipping non-DMG macOS file: $file"
+                    continue
+                    ;;
+                esac
 
                 target="HakuNeko-Next-v${VERSION}-macOS-${architecture}-UNTESTED.${extension}"
                 ;;
 
               *linux-untested*)
-                architecture="$(echo "$filename" | grep -oE '(arm64|x64|amd64)' | tail -1)"
+                case "$filename" in
+                  *arm64*|*ARM64*)
+                    architecture="ARM64"
+                    ;;
+                  *x64*|*amd64*)
+                    architecture="x64"
+                    ;;
+                  *)
+                    architecture="x64"
+                    ;;
+                esac
 
-                [ "$architecture" = "amd64" ] && architecture="x64"
-                [ "$architecture" = "arm64" ] && architecture="ARM64"
-                [ -z "$architecture" ] && architecture="unknown"
+                case "$filename" in
+                  *.snap)
+                    extension="snap"
+                    ;;
+                  *.AppImage|*.appimage)
+                    extension="AppImage"
+                    ;;
+                  *.tar.gz)
+                    extension="tar.gz"
+                    ;;
+                  *)
+                    echo "Skipping Linux support file: $file"
+                    continue
+                    ;;
+                esac
 
                 target="HakuNeko-Next-v${VERSION}-Linux-${architecture}-UNTESTED.${extension}"
                 ;;
 
               *windows*)
-                # Les archives Windows sont déjà nommées proprement
-                # par app/packaging/windows.mjs.
                 continue
                 ;;
 
               *)
+                echo "Skipping file outside known artifact folders: $file"
                 continue
                 ;;
             esac
 
-            mv "$file" "$directory/$target"
+            target_path="$directory/$target"
+
+            if [ "$file" = "$target_path" ]; then
+              continue
+            fi
+
+            rm -f "$target_path"
+            mv "$file" "$target_path"
+            echo "Renamed: $filename -> $target"
           done < <(find artifacts -type f -print0)
 
-          echo "Release assets:"
+          echo "Release assets after normalization:"
           find artifacts -type f -print
 
       - name: Verify release files
@@ -191,8 +226,6 @@ jobs:
                 -o -iname '*.dmg' \
                 -o -iname '*.snap' \
                 -o -iname '*.appimage' \
-                -o -iname '*.deb' \
-                -o -iname '*.rpm' \
                 -o -iname '*.tar.gz' \
                 -o -iname '*.7z' \
               \) \
@@ -204,6 +237,7 @@ jobs:
             exit 1
           fi
 
+          echo "${#RELEASE_FILES[@]} release files found:"
           printf '%s\n' "${RELEASE_FILES[@]}"
 
       - name: Create or update GitHub Release
@@ -248,8 +282,6 @@ jobs:
                 -o -iname '*.dmg' \
                 -o -iname '*.snap' \
                 -o -iname '*.appimage' \
-                -o -iname '*.deb' \
-                -o -iname '*.rpm' \
                 -o -iname '*.tar.gz' \
                 -o -iname '*.7z' \
               \) \
