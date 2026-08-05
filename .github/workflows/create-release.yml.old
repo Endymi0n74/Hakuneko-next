@@ -1,0 +1,228 @@
+name: Create GitHub Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      prerelease:
+        description: "Publier comme préversion"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - macos-latest
+          - ubuntu-latest
+
+    env:
+      NPM_CONFIG_ALLOW_GIT: all
+      SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.x
+          cache: npm
+
+      - name: Show versions
+        shell: bash
+        run: |
+          node --version
+          npm --version
+
+      - name: Setup Snapcraft
+        if: startsWith(matrix.os, 'ubuntu')
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y snapd
+          sudo systemctl start snapd
+          sudo snap install snapcraft --classic
+
+      - name: Install NPM packages
+        run: npm run npm:clean-install
+
+      - name: Build NW.js application
+        if: ${{ !startsWith(matrix.os, 'ubuntu') }}
+        run: npm run bundle --workspace app/nw
+
+      - name: Detect NW.js builds
+        id: nw-builds
+        if: ${{ !startsWith(matrix.os, 'ubuntu') }}
+        shell: bash
+        run: |
+          if [ -d "app/nw/bundle" ] && [ -n "$(find app/nw/bundle -type f -print -quit)" ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            echo "NW.js builds found:"
+            find app/nw/bundle -type f -print
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "No NW.js build was generated for ${{ matrix.os }}."
+          fi
+
+      - name: Build Electron application
+        run: npm run bundle --workspace app/electron
+
+      - name: Upload NW.js builds
+        if: ${{ steps.nw-builds.outputs.found == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-nw-${{ matrix.os }}
+          path: app/nw/bundle/
+          retention-days: 3
+          if-no-files-found: error
+
+      - name: Upload Electron builds
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-electron-${{ matrix.os }}
+          path: app/electron/bundle/
+          retention-days: 3
+          if-no-files-found: error
+
+  publish:
+    name: Publish Release
+    needs: build
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Prepare release information
+        shell: bash
+        run: |
+          VERSION="$(node -p "JSON.parse(require('fs').readFileSync('package.json', 'utf8')).version")"
+
+          echo "RELEASE_TAG=v${VERSION}" >> "$GITHUB_ENV"
+          echo "RELEASE_NAME=HakuNeko v${VERSION}" >> "$GITHUB_ENV"
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Display downloaded files
+        shell: bash
+        run: |
+          echo "Downloaded artifacts:"
+          find artifacts -type f -print
+
+      - name: Verify release files
+        shell: bash
+        run: |
+          mapfile -d '' RELEASE_FILES < <(
+            find artifacts \
+              -type f \
+              \( \
+                -iname '*.zip' \
+                -o -iname '*.exe' \
+                -o -iname '*.dmg' \
+                -o -iname '*.snap' \
+                -o -iname '*.appimage' \
+                -o -iname '*.deb' \
+                -o -iname '*.rpm' \
+                -o -iname '*.tar.gz' \
+                -o -iname '*.7z' \
+              \) \
+              -print0
+          )
+
+          if [ "${#RELEASE_FILES[@]}" -eq 0 ]; then
+            echo "No release files were generated."
+            exit 1
+          fi
+
+          echo "${#RELEASE_FILES[@]} release files found:"
+          printf '%s\n' "${RELEASE_FILES[@]}"
+
+      - name: Create or update GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IS_PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          if gh release view "$RELEASE_TAG" \
+            --repo "${{ github.repository }}" \
+            >/dev/null 2>&1
+          then
+            echo "Updating existing release ${RELEASE_TAG}..."
+
+            gh release edit "$RELEASE_TAG" \
+              --repo "${{ github.repository }}" \
+              --title "$RELEASE_NAME"
+          else
+            echo "Creating release ${RELEASE_TAG}..."
+
+            if [ "$IS_PRERELEASE" = "true" ]; then
+              gh release create "$RELEASE_TAG" \
+                --repo "${{ github.repository }}" \
+                --target "${{ github.sha }}" \
+                --title "$RELEASE_NAME" \
+                --generate-notes \
+                --prerelease
+            else
+              gh release create "$RELEASE_TAG" \
+                --repo "${{ github.repository }}" \
+                --target "${{ github.sha }}" \
+                --title "$RELEASE_NAME" \
+                --generate-notes
+            fi
+          fi
+
+      - name: Upload files to GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mapfile -d '' RELEASE_FILES < <(
+            find artifacts \
+              -type f \
+              \( \
+                -iname '*.zip' \
+                -o -iname '*.exe' \
+                -o -iname '*.dmg' \
+                -o -iname '*.snap' \
+                -o -iname '*.appimage' \
+                -o -iname '*.deb' \
+                -o -iname '*.rpm' \
+                -o -iname '*.tar.gz' \
+                -o -iname '*.7z' \
+              \) \
+              -print0
+          )
+
+          gh release upload "$RELEASE_TAG" \
+            "${RELEASE_FILES[@]}" \
+            --repo "${{ github.repository }}" \
+            --clobber
+
+      - name: Show published release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$RELEASE_TAG" \
+            --repo "${{ github.repository }}"
