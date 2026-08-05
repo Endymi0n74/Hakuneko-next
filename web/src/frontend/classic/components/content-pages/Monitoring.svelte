@@ -16,10 +16,12 @@
         type LibrarySeriesStatus,
     } from '../../../../engine/library/models/LibraryStatus';
     import type { LibrarySummary } from '../../../../engine/library/models/LibrarySummary';
+    import type { LibraryHistoryEntry } from '../../../../engine/library/models/LibraryHistory';
 
     const monitor = window.HakuNeko.ChapterMonitor;
 
     let statuses = $state<LibrarySeriesStatus[]>([]);
+    let history = $state<LibraryHistoryEntry[]>([]);
     let summary = $state<LibrarySummary>({
         total: 0,
         checking: 0,
@@ -79,6 +81,13 @@
         return value.toLocaleString();
     }
 
+    function formatHistoryTime(value: Date): string {
+        return value.toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+        });
+    }
+
     function statusLabel(status: LibraryStatusKind): string {
         switch(status) {
             case LibraryStatusKind.Checking:
@@ -121,6 +130,9 @@
         const onStatuses = (value: Map<string, LibrarySeriesStatus>) => {
             updateStatuses(value);
         };
+        const onHistory = (value: ReadonlyArray<LibraryHistoryEntry>) => {
+            history = [...value];
+        };
         const onSummary = (value: LibrarySummary) => {
             summary = { ...value };
         };
@@ -132,17 +144,20 @@
         };
 
         updateStatuses(monitor.Statuses.Value);
+        history = [...monitor.History.Value];
         summary = { ...monitor.Summary.Value };
         isRunning = monitor.IsRunning.Value;
         lastChecked = monitor.LastChecked.Value;
 
         monitor.Statuses.Subscribe(onStatuses);
+        monitor.History.Subscribe(onHistory);
         monitor.Summary.Subscribe(onSummary);
         monitor.IsRunning.Subscribe(onRunning);
         monitor.LastChecked.Subscribe(onLastChecked);
 
         return () => {
             monitor.Statuses.Unsubscribe(onStatuses);
+            monitor.History.Unsubscribe(onHistory);
             monitor.Summary.Unsubscribe(onSummary);
             monitor.IsRunning.Unsubscribe(onRunning);
             monitor.LastChecked.Unsubscribe(onLastChecked);
@@ -285,6 +300,50 @@
                         {#if series.error}
                             <p class="series-error">{series.error}</p>
                         {/if}
+                    </Tile>
+                {/each}
+            </div>
+        {/if}
+    </section>
+
+
+    <section class="history-section">
+        <div class="history-heading">
+            <div>
+                <h3>Historique</h3>
+                <small>{history.length} entrée(s)</small>
+            </div>
+
+            <Button
+                kind="ghost"
+                disabled={history.length === 0}
+                onclick={() => monitor.ClearHistory()}
+            >
+                Effacer l'historique
+            </Button>
+        </div>
+
+        {#if history.length === 0}
+            <Tile class="empty-state">
+                <p>L'historique apparaîtra après une vérification.</p>
+            </Tile>
+        {:else}
+            <div class="history-list">
+                {#each history.slice(0, 30) as entry}
+                    <Tile class="history-card">
+                        <div class="history-time">
+                            <strong>{formatHistoryTime(entry.timestamp)}</strong>
+                            <small>{entry.timestamp.toLocaleDateString()}</small>
+                        </div>
+
+                        <div class="history-content">
+                            <strong>{entry.title}</strong>
+                            <span>{entry.message}</span>
+                        </div>
+
+                        <span class="status {statusClass(entry.status)}">
+                            {statusLabel(entry.status)}
+                        </span>
                     </Tile>
                 {/each}
             </div>
@@ -459,6 +518,55 @@
     }
 
 
+
+    .history-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .history-heading h3 {
+        margin: 0;
+    }
+
+    .history-heading small {
+        color: var(--cds-text-secondary, var(--cds-text-02));
+    }
+
+    .history-list {
+        display: grid;
+        gap: 0.5rem;
+    }
+
+    :global(.history-card) {
+        display: grid;
+        grid-template-columns: 5rem minmax(0, 1fr) auto;
+        gap: 1rem;
+        align-items: center;
+    }
+
+    .history-time,
+    .history-content {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+    }
+
+    .history-time small,
+    .history-content span {
+        margin-top: 0.2rem;
+        color: var(--cds-text-secondary, var(--cds-text-02));
+    }
+
+    .history-content strong,
+    .history-content span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
     .series-heading {
         display: flex;
         align-items: center;
@@ -498,7 +606,8 @@
 
     @media (max-width: 45rem) {
         .heading,
-        .series-heading {
+        .series-heading,
+        .history-heading {
             align-items: stretch;
             flex-direction: column;
         }
@@ -514,6 +623,15 @@
         .series-main {
             align-items: flex-start;
             flex-direction: column;
+        }
+
+        :global(.history-card) {
+            grid-template-columns: 4rem minmax(0, 1fr);
+        }
+
+        :global(.history-card .status) {
+            grid-column: 2;
+            justify-self: start;
         }
     }
 </style>
