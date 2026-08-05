@@ -24,17 +24,12 @@ jobs:
           - os: windows-latest
             label: Windows
             artifact_suffix: windows
-            tested: true
-
           - os: macos-latest
             label: macOS (untested)
             artifact_suffix: macos-untested
-            tested: false
-
           - os: ubuntu-latest
             label: Linux (untested)
             artifact_suffix: linux-untested
-            tested: false
 
     env:
       NPM_CONFIG_ALLOW_GIT: all
@@ -52,12 +47,6 @@ jobs:
           node-version: 22.22.x
           cache: npm
 
-      - name: Show versions
-        shell: bash
-        run: |
-          node --version
-          npm --version
-
       - name: Setup Snapcraft
         if: startsWith(matrix.os, 'ubuntu')
         shell: bash
@@ -74,36 +63,22 @@ jobs:
         if: ${{ !startsWith(matrix.os, 'ubuntu') }}
         run: npm run bundle --workspace app/nw
 
-      - name: Detect NW.js builds
-        id: nw-builds
-        if: ${{ !startsWith(matrix.os, 'ubuntu') }}
-        shell: bash
-        run: |
-          if [ -d "app/nw/bundle" ] && [ -n "$(find app/nw/bundle -type f -print -quit)" ]; then
-            echo "found=true" >> "$GITHUB_OUTPUT"
-            echo "NW.js builds found:"
-            find app/nw/bundle -type f -print
-          else
-            echo "found=false" >> "$GITHUB_OUTPUT"
-            echo "No NW.js build was generated for ${{ matrix.label }}."
-          fi
-
       - name: Build Electron application
         run: npm run bundle --workspace app/electron
 
-      - name: Upload NW.js builds
-        if: ${{ steps.nw-builds.outputs.found == 'true' }}
+      - name: Upload NW.js builds as workflow artifacts
+        if: ${{ !startsWith(matrix.os, 'ubuntu') }}
         uses: actions/upload-artifact@v4
         with:
-          name: bundle-nw-${{ matrix.artifact_suffix }}
+          name: alternative-builds-${{ matrix.artifact_suffix }}
           path: app/nw/bundle/
           retention-days: 3
-          if-no-files-found: error
+          if-no-files-found: ignore
 
-      - name: Upload Electron builds
+      - name: Upload release builds
         uses: actions/upload-artifact@v4
         with:
-          name: bundle-electron-${{ matrix.artifact_suffix }}
+          name: release-builds-${{ matrix.artifact_suffix }}
           path: app/electron/bundle/
           retention-days: 3
           if-no-files-found: error
@@ -119,37 +94,54 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
 
       - name: Prepare release information
         shell: bash
         run: |
           VERSION="$(node -p "JSON.parse(require('fs').readFileSync('package.json', 'utf8')).version")"
-
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
           echo "RELEASE_TAG=v${VERSION}" >> "$GITHUB_ENV"
-          echo "RELEASE_NAME=HakuNeko v${VERSION}" >> "$GITHUB_ENV"
+          echo "RELEASE_NAME=HakuNeko Next v${VERSION}" >> "$GITHUB_ENV"
 
-      - name: Download build artifacts
+      - name: Download release artifacts
         uses: actions/download-artifact@v4
         with:
+          pattern: release-builds-*
           path: artifacts
+          merge-multiple: false
 
-      - name: Prefix untested builds
+      - name: Normalize release asset names
         shell: bash
         run: |
-          find artifacts -type f -print
-
           while IFS= read -r -d '' file; do
             directory="$(dirname "$file")"
             filename="$(basename "$file")"
+            extension="${filename##*.}"
 
-            if [[ "$directory" == *"-untested"* ]] && [[ "$filename" != untested-* ]]; then
-              mv "$file" "$directory/untested-$filename"
-            fi
+            case "$directory" in
+              *macos-untested*)
+                architecture="$(echo "$filename" | grep -oE '(arm64|x64)' | tail -1)"
+                [ "$architecture" = "arm64" ] && architecture="ARM64"
+                target="HakuNeko-Next-v${VERSION}-macOS-${architecture}-UNTESTED.${extension}"
+                ;;
+              *linux-untested*)
+                architecture="$(echo "$filename" | grep -oE '(arm64|x64|amd64)' | tail -1)"
+                [ "$architecture" = "amd64" ] && architecture="x64"
+                target="HakuNeko-Next-v${VERSION}-Linux-${architecture}-UNTESTED.${extension}"
+                ;;
+              *windows*)
+                # Windows ZIP files are already named by bundle-app-zip.mjs.
+                continue
+                ;;
+              *)
+                continue
+                ;;
+            esac
+
+            mv "$file" "$directory/$target"
           done < <(find artifacts -type f -print0)
 
-          echo "Release files after renaming:"
+          echo "Release assets:"
           find artifacts -type f -print
 
       - name: Verify release files
@@ -177,7 +169,6 @@ jobs:
             exit 1
           fi
 
-          echo "${#RELEASE_FILES[@]} release files found:"
           printf '%s\n' "${RELEASE_FILES[@]}"
 
       - name: Create or update GitHub Release
@@ -186,32 +177,23 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           IS_PRERELEASE: ${{ inputs.prerelease }}
         run: |
-          if gh release view "$RELEASE_TAG" \
-            --repo "${{ github.repository }}" \
-            >/dev/null 2>&1
-          then
-            echo "Updating existing release ${RELEASE_TAG}..."
-
+          if gh release view "$RELEASE_TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
             gh release edit "$RELEASE_TAG" \
               --repo "${{ github.repository }}" \
               --title "$RELEASE_NAME"
+          elif [ "$IS_PRERELEASE" = "true" ]; then
+            gh release create "$RELEASE_TAG" \
+              --repo "${{ github.repository }}" \
+              --target "${{ github.sha }}" \
+              --title "$RELEASE_NAME" \
+              --generate-notes \
+              --prerelease
           else
-            echo "Creating release ${RELEASE_TAG}..."
-
-            if [ "$IS_PRERELEASE" = "true" ]; then
-              gh release create "$RELEASE_TAG" \
-                --repo "${{ github.repository }}" \
-                --target "${{ github.sha }}" \
-                --title "$RELEASE_NAME" \
-                --generate-notes \
-                --prerelease
-            else
-              gh release create "$RELEASE_TAG" \
-                --repo "${{ github.repository }}" \
-                --target "${{ github.sha }}" \
-                --title "$RELEASE_NAME" \
-                --generate-notes
-            fi
+            gh release create "$RELEASE_TAG" \
+              --repo "${{ github.repository }}" \
+              --target "${{ github.sha }}" \
+              --title "$RELEASE_NAME" \
+              --generate-notes
           fi
 
       - name: Upload files to GitHub Release
@@ -240,11 +222,3 @@ jobs:
             "${RELEASE_FILES[@]}" \
             --repo "${{ github.repository }}" \
             --clobber
-
-      - name: Show published release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release view "$RELEASE_TAG" \
-            --repo "${{ github.repository }}"

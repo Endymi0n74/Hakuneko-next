@@ -1,10 +1,11 @@
 {
-  "name": "hakuneko",
+  "name": "hakuneko-next",
   "version": "1.2.0",
-  "title": "HakuNeko",
-  "description": "Manga, Anime & Novel Downloader",
+  "title": "HakuNeko Next",
+  "productName": "HakuNeko Next",
+  "description": "Téléchargeur et gestionnaire de bibliothèque pour mangas, animés et romans",
   "license": "Unlicense",
-  "homepage": "https://git.io/hakuneko",
+  "homepage": "https://github.com/Endymi0n74/Hakuneko-next",
   "type": "module",
   "workspaces": [
     "web",

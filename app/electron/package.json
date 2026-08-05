@@ -1,31 +1,33 @@
 {
-    "name": "hakuneko-electron",
-    "version": "1.0.0",
-    "title": "HakuNeko",
-    "description": "Manga, Anime & Novel Downloader (Electron based desktop client)",
-    "type": "module",
-    "main": "main.js",
-    "url": "https://localhost:3000",
-    "engines": {
-        "node": ">=22.13.0",
-        "npm": ">=10.9.2"
-    },
-    "dependencies": {
-        "commander": "15.0.0",
-        "websocket-rpc": "github:manga-download/websocket-rpc#v1.2.7"
-    },
-    "devDependencies": {
-        "extract-zip": "2.0.1",
-        "electron": "43.0.0",
-        "plist": "5.0.0"
-    },
-    "scripts": {
-        "check:ts": "tsc --noEmit --pretty",
-        "check": "npm run check:ts && eslint",
-        "build": "node ./scripts/build-app.mjs && vite build",
-        "bundle": "npm run build && node ./scripts/deploy-app.mjs",
-        "test": "vitest run",
-        "launch:dev": "npm run build && electron ./build --origin=https://localhost:3000 --ignore-certificate-errors",
-        "launch:prod": "npm run build && electron ./build --origin=https://localhost:5000 --ignore-certificate-errors"
-    }
+  "name": "hakuneko-next-electron",
+  "version": "1.2.0",
+  "title": "HakuNeko Next",
+  "productName": "HakuNeko Next",
+  "executableName": "HakuNeko Next",
+  "description": "Téléchargeur et gestionnaire de bibliothèque pour mangas, animés et romans",
+  "type": "module",
+  "main": "main.js",
+  "url": "https://localhost:3000",
+  "engines": {
+    "node": ">=22.13.0",
+    "npm": ">=10.9.2"
+  },
+  "dependencies": {
+    "commander": "15.0.0",
+    "websocket-rpc": "github:manga-download/websocket-rpc#v1.2.7"
+  },
+  "devDependencies": {
+    "extract-zip": "2.0.1",
+    "electron": "43.0.0",
+    "plist": "5.0.0"
+  },
+  "scripts": {
+    "check:ts": "tsc --noEmit --pretty",
+    "check": "npm run check:ts && eslint",
+    "build": "node ./scripts/build-app.mjs && vite build",
+    "bundle": "npm run build && node ./scripts/deploy-app.mjs",
+    "test": "vitest run",
+    "launch:dev": "npm run build && electron ./build --origin=https://localhost:3000 --ignore-certificate-errors",
+    "launch:prod": "npm run build && electron ./build --origin=https://localhost:5000 --ignore-certificate-errors"
+  }
 }
