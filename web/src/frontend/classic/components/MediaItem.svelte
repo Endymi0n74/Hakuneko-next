@@ -40,20 +40,7 @@
     import type { Directory } from '../../../engine/SettingsManager';
     import { GlobalSettings } from '../stores/Settings.svelte';
     
-    import { Tags, type Tag } from '../../../engine/Tags';
-    const availableLanguageTags = Tags.Language.toArray();
-
-    // NOTE: This relies on all language tags having a unicode flag prefix in their corresponding `Title`
-    function extractUnicodeFlagFromTags(tags: ReadonlyArray<Tag>): string {
-        const languageTagTitleResourceKey = tags.find((tag) =>
-            availableLanguageTags.includes(tag),
-        )?.Title;
-        return (
-            GlobalSettings.Locale[languageTagTitleResourceKey]
-                ?.call(undefined)
-                ?.slice(0, 4) ?? '🏴'
-        );
-    }
+    import LanguageFlag from './common/LanguageFlag.svelte';
 
     let flag: FlagType = $state();
     const flagiconmap = new Map<FlagType, any>([
@@ -227,7 +214,7 @@
     <ClickableTile class="title" onclick={(event) => onView(event)}>
         {#if multilang}
             <span class="multilang">
-                {extractUnicodeFlagFromTags(item.Tags.Value)}
+                <LanguageFlag tags={item.Tags.Value} />
             </span>
         {/if}
         <span title={item.Title}>{item.Title}</span>
