@@ -33,18 +33,80 @@
     let isRunning = $state(false);
     let lastChecked = $state<Date | null>(null);
     let searchQuery = $state('');
+    type SortKey = 'status' | 'title' | 'website' | 'known' | 'new' | 'checked';
+    let sortKey = $state<SortKey>('status');
+    let sortAscending = $state(true);
 
     function getFilteredStatuses(): LibrarySeriesStatus[] {
         const query = searchQuery.trim().toLocaleLowerCase();
 
-        if(query.length === 0) {
-            return statuses;
+        const filtered = query.length === 0
+            ? [...statuses]
+            : statuses.filter(series => {
+                return series.title.toLocaleLowerCase().includes(query)
+                    || series.websiteID.toLocaleLowerCase().includes(query);
+            });
+
+        const statusOrder: Record<LibraryStatusKind, number> = {
+            [LibraryStatusKind.NewContent]: 0,
+            [LibraryStatusKind.Error]: 1,
+            [LibraryStatusKind.Checking]: 2,
+            [LibraryStatusKind.UpToDate]: 3,
+            [LibraryStatusKind.Idle]: 4,
+        };
+
+        filtered.sort((left, right) => {
+            let result = 0;
+
+            switch(sortKey) {
+                case 'status':
+                    result = statusOrder[left.status] - statusOrder[right.status];
+                    break;
+
+                case 'title':
+                    result = left.title.localeCompare(right.title);
+                    break;
+
+                case 'website':
+                    result = left.websiteID.localeCompare(right.websiteID);
+                    break;
+
+                case 'known':
+                    result = left.knownChapterCount - right.knownChapterCount;
+                    break;
+
+                case 'new':
+                    result = left.newChapterCount - right.newChapterCount;
+                    break;
+
+                case 'checked':
+                    result = (left.lastChecked?.getTime() ?? 0)
+                        - (right.lastChecked?.getTime() ?? 0);
+                    break;
+            }
+
+            return sortAscending ? result : -result;
+        });
+
+        return filtered;
+    }
+
+    function changeSort(nextKey: SortKey): void {
+        if(sortKey === nextKey) {
+            sortAscending = !sortAscending;
+            return;
         }
 
-        return statuses.filter(series => {
-            return series.title.toLocaleLowerCase().includes(query)
-                || series.websiteID.toLocaleLowerCase().includes(query);
-        });
+        sortKey = nextKey;
+        sortAscending = true;
+    }
+
+    function sortIndicator(key: SortKey): string {
+        if(sortKey !== key) {
+            return '';
+        }
+
+        return sortAscending ? ' ▲' : ' ▼';
     }
 
     function updateStatuses(value: Map<string, LibrarySeriesStatus>) {
@@ -247,60 +309,65 @@
                 </Button>
             </Tile>
         {:else}
-            <div class="series-list">
-                {#each getFilteredStatuses() as series (series.bookmarkKey)}
-                    <Tile class="series-card">
-                        <div class="series-main">
-                            <div class="series-title">
-                                {#if series.status === LibraryStatusKind.Checking}
-                                    <InProgress size={20} />
-                                {:else if series.status === LibraryStatusKind.UpToDate}
-                                    <CheckmarkFilled size={20} />
-                                {:else if series.status === LibraryStatusKind.NewContent}
-                                    <NotificationNew size={20} />
-                                {:else if series.status === LibraryStatusKind.Error}
-                                    <WarningAlt size={20} />
-                                {/if}
+            <div class="series-table">
+                <div class="series-table-header">
+                    <button onclick={() => changeSort('status')}>
+                        État{sortIndicator('status')}
+                    </button>
+                    <button onclick={() => changeSort('title')}>
+                        Série{sortIndicator('title')}
+                    </button>
+                    <button onclick={() => changeSort('website')}>
+                        Site{sortIndicator('website')}
+                    </button>
+                    <button onclick={() => changeSort('known')}>
+                        Connus{sortIndicator('known')}
+                    </button>
+                    <button onclick={() => changeSort('new')}>
+                        Nouveaux{sortIndicator('new')}
+                    </button>
+                    <button onclick={() => changeSort('checked')}>
+                        Vérifié{sortIndicator('checked')}
+                    </button>
+                </div>
 
-                                <div>
-                                    <strong>{series.title}</strong>
-                                    <small>{series.websiteID}</small>
-                                </div>
-                            </div>
+                {#each getFilteredStatuses() as series (series.bookmarkKey)}
+                    <article class="series-row">
+                        <div class="series-status-cell">
+                            {#if series.status === LibraryStatusKind.Checking}
+                                <InProgress size={18} />
+                            {:else if series.status === LibraryStatusKind.UpToDate}
+                                <CheckmarkFilled size={18} />
+                            {:else if series.status === LibraryStatusKind.NewContent}
+                                <NotificationNew size={18} />
+                            {:else if series.status === LibraryStatusKind.Error}
+                                <WarningAlt size={18} />
+                            {/if}
 
                             <span class="status {statusClass(series.status)}">
                                 {statusLabel(series.status)}
                             </span>
                         </div>
 
-                        <div class="series-details">
-                            <span>
-                                Chapitres connus :
-                                <strong>{series.knownChapterCount}</strong>
-                            </span>
-
-                            <span>
-                                Nouveaux :
-                                <strong>{series.newChapterCount}</strong>
-                            </span>
-
+                        <div class="series-title-cell">
+                            <strong title={series.title}>{series.title}</strong>
                             {#if series.lastKnownChapter}
-                                <span title={series.lastKnownChapter}>
-                                    Dernier :
-                                    <strong>{series.lastKnownChapter}</strong>
-                                </span>
+                                <small title={series.lastKnownChapter}>
+                                    Dernier : {series.lastKnownChapter}
+                                </small>
                             {/if}
-
-                            <span>
-                                Vérifié :
-                                <strong>{formatDate(series.lastChecked)}</strong>
-                            </span>
+                            {#if series.error}
+                                <small class="series-error">{series.error}</small>
+                            {/if}
                         </div>
 
-                        {#if series.error}
-                            <p class="series-error">{series.error}</p>
-                        {/if}
-                    </Tile>
+                        <span title={series.websiteID}>{series.websiteID}</span>
+                        <strong>{series.knownChapterCount}</strong>
+                        <strong class:new-count={series.newChapterCount > 0}>
+                            {series.newChapterCount}
+                        </strong>
+                        <span>{formatDate(series.lastChecked)}</span>
+                    </article>
                 {/each}
             </div>
         {/if}
@@ -416,107 +483,87 @@
         margin: 0 0 0.75rem;
     }
 
-    .series-list {
+    .series-table {
         display: grid;
-        gap: 0.5rem;
+        gap: 0.125rem;
     }
 
-    :global(.series-card) {
-        display: flex;
-        flex-direction: column;
+    .series-table-header,
+    .series-row {
+        display: grid;
+        grid-template-columns:
+            minmax(8rem, 0.85fr)
+            minmax(13rem, 1.8fr)
+            minmax(7rem, 0.8fr)
+            minmax(4.5rem, 0.45fr)
+            minmax(5rem, 0.5fr)
+            minmax(10rem, 1fr);
         gap: 0.75rem;
-    }
-
-    .series-main,
-    .series-title,
-    .series-details {
-        display: flex;
         align-items: center;
     }
 
-    .series-main {
-        justify-content: space-between;
-        gap: 1rem;
+    .series-table-header {
+        padding: 0.6rem 0.75rem;
+        background: var(--cds-layer-accent, var(--cds-ui-02));
     }
 
-    .series-title {
-        gap: 0.65rem;
-        min-width: 0;
+    .series-table-header button {
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: var(--cds-text-secondary, var(--cds-text-02));
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-align: left;
+        cursor: pointer;
     }
 
-    .series-title div {
-        display: flex;
-        flex-direction: column;
-        min-width: 0;
+    .series-table-header button:hover {
+        color: var(--cds-text-primary, var(--cds-text-01));
     }
 
-    .series-title strong,
-    .series-title small {
+    .series-row {
+        min-height: 3.75rem;
+        padding: 0.65rem 0.75rem;
+        background: var(--cds-layer, var(--cds-ui-01));
+    }
+
+    .series-row:hover {
+        background: var(--cds-layer-hover, var(--cds-hover-ui));
+    }
+
+    .series-row > span,
+    .series-title-cell strong,
+    .series-title-cell small {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
     }
 
-    .series-title small {
+    .series-status-cell {
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+    }
+
+    .series-title-cell {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+    }
+
+    .series-title-cell small {
+        margin-top: 0.15rem;
         color: var(--cds-text-secondary, var(--cds-text-02));
     }
 
-    .status {
-        flex: none;
-        padding: 0.25rem 0.55rem;
-        border-radius: 1rem;
-        font-size: 0.75rem;
-        font-weight: 600;
-    }
-
-    .status.up-to-date {
-        background: var(--cds-support-success);
-        color: var(--cds-text-on-color);
-    }
-
-    .status.new-content {
-        background: var(--cds-support-info);
-        color: var(--cds-text-on-color);
-    }
-
-    .status.error {
-        background: var(--cds-support-error);
-        color: var(--cds-text-on-color);
-    }
-
-    .status.checking {
-        background: var(--cds-support-warning);
-        color: var(--cds-text-primary);
-    }
-
-    .status.idle {
-        background: var(--cds-layer-hover);
-    }
-
-    .series-details {
-        flex-wrap: wrap;
-        gap: 0.6rem 1.5rem;
-        color: var(--cds-text-secondary, var(--cds-text-02));
-    }
-
-    .series-details span {
-        min-width: 9rem;
-    }
-
-    .series-error {
-        margin: 0;
+    .series-title-cell .series-error {
         color: var(--cds-support-error);
-        overflow-wrap: anywhere;
     }
 
-    :global(.empty-state) {
-        text-align: center;
+    .new-count {
+        color: var(--cds-support-info);
     }
-
-    :global(.empty-state p) {
-        margin: 0.25rem;
-    }
-
 
 
     .history-heading {
@@ -602,6 +649,18 @@
         .summary {
             grid-template-columns: repeat(2, minmax(10rem, 1fr));
         }
+
+        .series-table-header {
+            display: none;
+        }
+
+        .series-row {
+            grid-template-columns: minmax(8rem, 0.8fr) minmax(12rem, 1.4fr) 1fr 5rem 5rem;
+        }
+
+        .series-row > span:last-child {
+            grid-column: 2 / -1;
+        }
     }
 
     @media (max-width: 45rem) {
@@ -620,9 +679,12 @@
             grid-template-columns: 1fr;
         }
 
-        .series-main {
-            align-items: flex-start;
-            flex-direction: column;
+        .series-row {
+            grid-template-columns: 1fr;
+        }
+
+        .series-row > span:last-child {
+            grid-column: auto;
         }
 
         :global(.history-card) {
