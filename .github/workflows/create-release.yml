@@ -14,16 +14,27 @@ permissions:
 
 jobs:
   build:
-    name: Build (${{ matrix.os }})
+    name: Build (${{ matrix.label }})
     runs-on: ${{ matrix.os }}
 
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - windows-latest
-          - macos-latest
-          - ubuntu-latest
+        include:
+          - os: windows-latest
+            label: Windows
+            artifact_suffix: windows
+            tested: true
+
+          - os: macos-latest
+            label: macOS (untested)
+            artifact_suffix: macos-untested
+            tested: false
+
+          - os: ubuntu-latest
+            label: Linux (untested)
+            artifact_suffix: linux-untested
+            tested: false
 
     env:
       NPM_CONFIG_ALLOW_GIT: all
@@ -74,7 +85,7 @@ jobs:
             find app/nw/bundle -type f -print
           else
             echo "found=false" >> "$GITHUB_OUTPUT"
-            echo "No NW.js build was generated for ${{ matrix.os }}."
+            echo "No NW.js build was generated for ${{ matrix.label }}."
           fi
 
       - name: Build Electron application
@@ -84,7 +95,7 @@ jobs:
         if: ${{ steps.nw-builds.outputs.found == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: bundle-nw-${{ matrix.os }}
+          name: bundle-nw-${{ matrix.artifact_suffix }}
           path: app/nw/bundle/
           retention-days: 3
           if-no-files-found: error
@@ -92,7 +103,7 @@ jobs:
       - name: Upload Electron builds
         uses: actions/upload-artifact@v4
         with:
-          name: bundle-electron-${{ matrix.os }}
+          name: bundle-electron-${{ matrix.artifact_suffix }}
           path: app/electron/bundle/
           retention-days: 3
           if-no-files-found: error
@@ -124,10 +135,21 @@ jobs:
         with:
           path: artifacts
 
-      - name: Display downloaded files
+      - name: Prefix untested builds
         shell: bash
         run: |
-          echo "Downloaded artifacts:"
+          find artifacts -type f -print
+
+          while IFS= read -r -d '' file; do
+            directory="$(dirname "$file")"
+            filename="$(basename "$file")"
+
+            if [[ "$directory" == *"-untested"* ]] && [[ "$filename" != untested-* ]]; then
+              mv "$file" "$directory/untested-$filename"
+            fi
+          done < <(find artifacts -type f -print0)
+
+          echo "Release files after renaming:"
           find artifacts -type f -print
 
       - name: Verify release files
