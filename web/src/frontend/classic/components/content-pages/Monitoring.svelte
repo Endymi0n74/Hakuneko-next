@@ -30,6 +30,20 @@
     });
     let isRunning = $state(false);
     let lastChecked = $state<Date | null>(null);
+    let searchQuery = $state('');
+
+    function getFilteredStatuses(): LibrarySeriesStatus[] {
+        const query = searchQuery.trim().toLocaleLowerCase();
+
+        if(query.length === 0) {
+            return statuses;
+        }
+
+        return statuses.filter(series => {
+            return series.title.toLocaleLowerCase().includes(query)
+                || series.websiteID.toLocaleLowerCase().includes(query);
+        });
+    }
 
     function updateStatuses(value: Map<string, LibrarySeriesStatus>) {
         statuses = [...value.values()].sort((left, right) => {
@@ -187,7 +201,19 @@
     </Tile>
 
     <section class="series-section">
-        <h3>Séries</h3>
+        <div class="series-heading">
+            <div>
+                <h3>Séries</h3>
+                <small>{getFilteredStatuses().length} résultat(s)</small>
+            </div>
+
+            <input
+                class="series-search"
+                type="search"
+                placeholder="Rechercher une série ou un site"
+                bind:value={searchQuery}
+            />
+        </div>
 
         {#if statuses.length === 0}
             <Tile class="empty-state">
@@ -198,9 +224,16 @@
                     Lance une vérification pour analyser les favoris.
                 </p>
             </Tile>
+        {:else if getFilteredStatuses().length === 0}
+            <Tile class="empty-state">
+                <p>Aucune série ne correspond à la recherche.</p>
+                <Button kind="ghost" onclick={() => searchQuery = ''}>
+                    Effacer la recherche
+                </Button>
+            </Tile>
         {:else}
             <div class="series-list">
-                {#each statuses as series (series.bookmarkKey)}
+                {#each getFilteredStatuses() as series (series.bookmarkKey)}
                     <Tile class="series-card">
                         <div class="series-main">
                             <div class="series-title">
@@ -425,6 +458,38 @@
         margin: 0.25rem;
     }
 
+
+    .series-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .series-heading h3 {
+        margin: 0;
+    }
+
+    .series-heading small {
+        color: var(--cds-text-secondary, var(--cds-text-02));
+    }
+
+    .series-search {
+        width: min(24rem, 45vw);
+        padding: 0.65rem 0.75rem;
+        border: 0;
+        border-bottom: 0.0625rem solid var(--cds-border-strong);
+        outline: 0;
+        background: var(--cds-field, var(--cds-field-01));
+        color: inherit;
+    }
+
+    .series-search:focus {
+        outline: 0.125rem solid var(--cds-focus);
+        outline-offset: -0.125rem;
+    }
+
     @media (max-width: 70rem) {
         .summary {
             grid-template-columns: repeat(2, minmax(10rem, 1fr));
@@ -432,9 +497,14 @@
     }
 
     @media (max-width: 45rem) {
-        .heading {
+        .heading,
+        .series-heading {
             align-items: stretch;
             flex-direction: column;
+        }
+
+        .series-search {
+            width: auto;
         }
 
         .summary {
