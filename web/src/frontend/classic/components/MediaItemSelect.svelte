@@ -20,6 +20,7 @@
     import { Tags, type Tag } from '../../../engine/Tags';
     const availableLanguageTags = Tags.Language.toArray();
     import { GlobalSettings } from '../stores/Settings.svelte';
+    import { GetNextLocale } from '../lib/NextLocale';
 
     import type {
         StoreableMediaContainer,
@@ -31,6 +32,8 @@
     import { resizeBar } from '../lib/actions';
     import { Key as GlobalKey } from '../../../engine/SettingsGlobal';
     import type { Directory } from '../../../engine/SettingsManager';
+
+    let nextLocale = $derived(GetNextLocale(GlobalSettings.LocaleID));
 
     let items: MediaContainer<MediaItem>[] = $state([]);
     let filteredItems: MediaContainer<MediaItem>[] = $state([]);
@@ -93,18 +96,192 @@
             return [...detectedLangaugeTags, ...undetectedLangaugeTags];
         }, [])
     );
-    let langComboboxItems =
-        $derived(MediaLanguages.length > 0
-            ? [
-                { id: '*', text: '*' },
-                ...MediaLanguages.map((lang) => {
-                    return { id: lang, text: GlobalSettings.Locale[lang.Title]() };
-                }),
-            ]
-            : [{ id: '*', text: '*' }]);
+        const LanguagePresentation: Record<
+        string,
+        { flag: string; label: string }
+    > = {
+        Multilingual: { flag: '🌐', label: 'Multilingual' },
+        Arabic: { flag: '🇸🇦', label: 'العربية' },
+        Chinese: { flag: '🇨🇳', label: '中文' },
+        English: { flag: '🇬🇧', label: 'English' },
+        French: { flag: '🇫🇷', label: 'Français' },
+        German: { flag: '🇩🇪', label: 'Deutsch' },
+        Indonesian: { flag: '🇮🇩', label: 'Bahasa Indonesia' },
+        Italian: { flag: '🇮🇹', label: 'Italiano' },
+        Japanese: { flag: '🇯🇵', label: '日本語' },
+        Korean: { flag: '🇰🇷', label: '한국어' },
+        Polish: { flag: '🇵🇱', label: 'Polski' },
+        Portuguese: {
+            flag: '🇧🇷',
+            label: 'Português (Brasil)',
+        },
+        Russian: { flag: '🇷🇺', label: 'Русский' },
+        Spanish: { flag: '🇪🇸', label: 'Español' },
+        Thai: { flag: '🇹🇭', label: 'ไทย' },
+        Turkish: { flag: '🇹🇷', label: 'Türkçe' },
+        Vietnamese: { flag: '🇻🇳', label: 'Tiếng Việt' },
+    };
+
+    const PreferredLanguageOrder = [
+        'French',
+        'English',
+        'Portuguese',
+        'Spanish',
+        'Japanese',
+        'Korean',
+        'Chinese',
+        'German',
+        'Italian',
+        'Indonesian',
+        'Polish',
+        'Russian',
+        'Turkish',
+        'Vietnamese',
+        'Thai',
+        'Arabic',
+        'Multilingual',
+    ];
+
+    function languageKey(language: Tag): string {
+        return String(language.Title).split('_').at(-1)
+            ?? String(language.Title);
+    }
+
+    function languageText(language: Tag): string {
+        const presentation =
+            LanguagePresentation[languageKey(language)];
+
+        return presentation
+            ? `${presentation.flag} ${presentation.label}`
+            : GlobalSettings.Locale[language.Title]();
+    }
+
+    function languagePriority(language: Tag): number {
+        const priority = PreferredLanguageOrder.indexOf(
+            languageKey(language),
+        );
+
+        return priority === -1
+            ? Number.MAX_SAFE_INTEGER
+            : priority;
+    }
+
+    const hiddenLanguageStorageKey =
+        'hakuneko-next.hidden-chapter-languages';
+
+    function loadHiddenLanguages(): string[] {
+        try {
+            return JSON.parse(
+                localStorage.getItem(hiddenLanguageStorageKey)
+                    ?? '[]',
+            );
+        } catch {
+            return [];
+        }
+    }
+
+    let hiddenLanguageKeys: string[] =
+        $state(loadHiddenLanguages());
+
+    function isLanguageVisible(language: Tag): boolean {
+        return !hiddenLanguageKeys.includes(
+            languageKey(language),
+        );
+    }
 
     let langFilterID: '*' | Tag = $state('*');
-    let langFilter = $derived(langFilterID === '*' ? null : langFilterID);
+    let langFilter = $derived(
+        langFilterID === '*' ? null : langFilterID,
+    );
+
+    function saveHiddenLanguages(): void {
+        localStorage.setItem(
+            hiddenLanguageStorageKey,
+            JSON.stringify(hiddenLanguageKeys),
+        );
+    }
+
+    function setLanguageVisible(
+        language: Tag,
+        visible: boolean,
+    ): void {
+        const key = languageKey(language);
+
+        hiddenLanguageKeys = visible
+            ? hiddenLanguageKeys.filter(
+                hidden => hidden !== key,
+            )
+            : [...new Set([
+                ...hiddenLanguageKeys,
+                key,
+            ])];
+
+        saveHiddenLanguages();
+
+        if(!visible && langFilterID === language) {
+            langFilterID = '*';
+        }
+    }
+
+    function showAllLanguages(): void {
+        hiddenLanguageKeys = [];
+        saveHiddenLanguages();
+    }
+
+    function hideAllLanguages(): void {
+        hiddenLanguageKeys =
+            MediaLanguages.map(languageKey);
+
+        saveHiddenLanguages();
+        langFilterID = '*';
+    }
+
+    let OrderedMediaLanguages: Tag[] = $derived(
+        [...MediaLanguages].sort((left, right) => {
+            const priority =
+                languagePriority(left)
+                - languagePriority(right);
+
+            return priority !== 0
+                ? priority
+                : languageText(left).localeCompare(
+                    languageText(right),
+                );
+        }),
+    );
+
+    let VisibleMediaLanguages: Tag[] = $derived(
+        OrderedMediaLanguages.filter(
+            isLanguageVisible,
+        ),
+    );
+
+    let allLanguagesText = $derived(
+        `🌍 ${nextLocale.allLanguages} (${VisibleMediaLanguages.length}/${MediaLanguages.length})`,
+    );
+
+    let langComboboxItems = $derived(
+        VisibleMediaLanguages.length > 0
+            ? [
+                {
+                    id: '*',
+                    text: allLanguagesText,
+                },
+                ...VisibleMediaLanguages.map(
+                    language => ({
+                        id: language,
+                        text: languageText(language),
+                    }),
+                ),
+            ]
+            : [
+                {
+                    id: '*',
+                    text: allLanguagesText,
+                },
+            ],
+    );
+
     //Media Changed and the langFilter is no longer valid.
     $effect(()=>{
         if(items.length>0 && !MediaLanguages.includes(langFilter)) langFilterID = '*';
@@ -307,7 +484,7 @@
 
 <div id="Item" transition:fade>
     <div id="ItemTitle">
-        <h5>Item List</h5>
+        <h5>{nextLocale.itemList}</h5>
     </div>
     <div id="LanguageFilter">
         <Button
@@ -319,12 +496,58 @@
         />
 
         <Dropdown
-            disabled={MediaLanguages.length === 0}
-            placeholder="Select a language"
+            disabled={VisibleMediaLanguages.length === 0}
+            placeholder={nextLocale.allLanguages}
             bind:selectedId={langFilterID}
             size="sm"
             items={langComboboxItems}
         />
+
+        <details id="LanguagePreferences">
+            <summary title="Choose displayed languages">
+                🌍
+            </summary>
+
+            <div class="language-preferences-menu">
+                <div class="language-preferences-header">
+                    <strong>
+                        {nextLocale.displayedLanguages}
+                        ({VisibleMediaLanguages.length}/{MediaLanguages.length})
+                    </strong>
+
+                    <div class="language-preferences-actions">
+                        <button
+                            type="button"
+                            onclick={showAllLanguages}
+                        >
+                            {nextLocale.selectAll}
+                        </button>
+
+                        <button
+                            type="button"
+                            onclick={hideAllLanguages}
+                        >
+                            {nextLocale.selectNone}
+                        </button>
+                    </div>
+                </div>
+
+                {#each OrderedMediaLanguages as language}
+                    <label>
+                        <input
+                            type="checkbox"
+                            checked={isLanguageVisible(language)}
+                            onchange={(event) =>
+                                setLanguageVisible(
+                                    language,
+                                    event.currentTarget.checked,
+                                )}
+                        />
+                        <span>{languageText(language)}</span>
+                    </label>
+                {/each}
+            </div>
+        </details>
     </div>
     <div id="ItemFilter">
         <Search id="ItemFilterSearch" size="sm" bind:value={itemNameFilter} />
@@ -359,7 +582,7 @@
         {/await}
     </div>
     <div id="ItemBottom">
-        Items: {filteredItems.length}/{items.length}
+        {nextLocale.items}: {filteredItems.length}/{items.length}
         <Button
             size="small"
             kind="ghost"
@@ -397,8 +620,82 @@
     #LanguageFilter {
         grid-area: LanguageFilter;
         display: grid;
-        grid-template-columns: auto 1fr;
+        grid-template-columns: auto 1fr auto;
+        position: relative;
     }
+
+    #LanguagePreferences {
+        position: relative;
+    }
+
+    #LanguagePreferences > summary {
+        align-items: center;
+        cursor: pointer;
+        display: flex;
+        height: 100%;
+        justify-content: center;
+        list-style: none;
+        min-width: 2.5rem;
+        user-select: none;
+    }
+
+    #LanguagePreferences > summary::-webkit-details-marker {
+        display: none;
+    }
+
+    .language-preferences-menu {
+        background: var(--cds-layer);
+        border: 1px solid var(--cds-border-subtle);
+        box-shadow: 0 0.25rem 1rem rgb(0 0 0 / 25%);
+        display: flex;
+        flex-direction: column;
+        gap: 0.45rem;
+        max-height: 24rem;
+        min-width: 17rem;
+        overflow-y: auto;
+        padding: 0.8rem;
+        position: absolute;
+        right: 0;
+        top: 100%;
+        z-index: 500;
+    }
+
+    .language-preferences-header {
+        align-items: center;
+        display: flex;
+        gap: 0.75rem;
+        justify-content: space-between;
+        margin-bottom: 0.35rem;
+    }
+
+    .language-preferences-actions {
+        display: flex;
+        gap: 0.25rem;
+    }
+
+    .language-preferences-actions button {
+        background: transparent;
+        border: 1px solid var(--cds-border-subtle);
+        color: inherit;
+        cursor: pointer;
+        font: inherit;
+        min-height: 1.65rem;
+        padding: 0 0.45rem;
+    }
+
+    .language-preferences-actions button:hover {
+        background: var(--cds-layer-hover);
+    }
+
+    .language-preferences-menu label {
+        align-items: center;
+        cursor: pointer;
+        display: flex;
+        gap: 0.55rem;
+        min-height: 1.75rem;
+        white-space: nowrap;
+    }
+
     #ItemFilter {
         grid-area: ItemFilter;
     }

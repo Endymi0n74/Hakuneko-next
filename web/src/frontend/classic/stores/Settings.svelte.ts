@@ -7,7 +7,7 @@ import { GetLocale } from '../../../i18n/Localization';
 export const enum Key {
     //
     Theme = 'theme',
-    Theme_HakuNeko = 'hakuneko',
+    Theme_HakuNeko = 'HakuNeko-Next',
     Theme_White = 'white',
     Theme_Gray10 = 'g10',
     Theme_Gray90 = 'g90',
@@ -149,6 +149,7 @@ export const Settings = new UIClassicStore();
 
 class GlobalStore {
     private storeLocale = LoadSettingStore<string, Choice>(globalScopeSettings, GlobalKey.Language);
-    Locale = $derived(GetLocale(this.storeLocale.Value as LocaleID));
+    LocaleID = $derived(this.storeLocale.Value as LocaleID);
+    Locale = $derived(GetLocale(this.LocaleID));
 }
 export const GlobalSettings = new GlobalStore();

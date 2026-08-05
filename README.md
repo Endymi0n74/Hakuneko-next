@@ -1,159 +1,44 @@
-# HakuNeko Next
+# Lot propre de test v1.4
 
-[![Release](https://img.shields.io/github/v/release/Endymi0n74/Hakuneko-next?display_name=tag&sort=semver)](../../releases)
-[![Create GitHub Release](https://github.com/Endymi0n74/Hakuneko-next/actions/workflows/create-release.yml/badge.svg)](https://github.com/Endymi0n74/Hakuneko-next/actions/workflows/create-release.yml)
-![Electron](https://img.shields.io/badge/Electron-43-47848F?logo=electron)
-![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript)
-![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite)
-![Vibe Coding](https://img.shields.io/badge/development-vibe%20coding-ff8c42)
-![License](https://img.shields.io/badge/license-Unlicense-green)
+Ce lot remplace les scripts précédents.
 
-Fork desktop de **HakuNeko** destiné au téléchargement et à la consultation de mangas, d'animes et de romans.
+Il :
 
-Cette version met l'accent sur des applications de bureau autonomes avec Electron et NW.js, ainsi que sur la publication automatisée de releases Windows, macOS et Linux avec GitHub Actions.
+- restaure les traductions gérées par Crowdin ;
+- corrige les erreurs ESLint de `FetchProviderCommon.ts` ;
+- reconstruit proprement tout le bloc de gestion des langues ;
+- garantit le bon ordre des déclarations Svelte ;
+- ajoute les drapeaux, le compteur, l'ordre stable et les choix All / None.
 
-## Télécharger
+## Installation
 
-Les versions prêtes à l'emploi sont disponibles dans la section [Releases](../../releases).
+Copier les deux scripts `.mjs` à la racine du dépôt puis lancer :
 
-Sous Windows, télécharge l'archive correspondant à ton architecture, extrais-la dans un dossier puis lance l'exécutable HakuNeko.
+```powershell
+cd D:\Codex\hakuneko-next
 
-> Le projet est en développement actif. Certaines plateformes ou fonctions peuvent encore nécessiter des ajustements.
+node .\apply-v1.4-clean-test.mjs
 
-## Fonctionnalités
-
-- Client desktop Electron autonome.
-- Builds NW.js lorsque la plateforme est prise en charge.
-- Interface web embarquée dans l'application desktop.
-- Recherche et navigation dans les catalogues pris en charge.
-- Téléchargement de chapitres et gestion locale des fichiers.
-- Builds automatisés pour Windows, macOS et Linux.
-- Publication automatique des fichiers compilés dans GitHub Releases.
-
-## Vibe coding et assistance IA
-
-Ce fork est développé principalement selon une approche de **vibe coding assistée par IA**.
-
-Les outils d'intelligence artificielle servent à explorer des solutions, produire ou modifier du code, analyser les erreurs de compilation et accélérer le débogage. Les modifications ne sont toutefois pas considérées comme terminées uniquement parce qu'elles ont été générées par une IA.
-
-Avant publication, les changements sont autant que possible :
-
-- compilés localement ;
-- testés dans l'application desktop ;
-- vérifiés dans GitHub Actions ;
-- corrigés à partir des erreurs réellement observées ;
-- validés manuellement sur une build distribuable.
-
-Plus de détails sont disponibles dans [docs/VIBE_CODING.md](docs/VIBE_CODING.md).
-
-## Outils utilisés
-
-### Développement assisté
-
-- ChatGPT / OpenAI
-- Codex
-- GitHub Copilot
-- Visual Studio Code
-
-### Stack technique
-
-- Node.js 22
-- npm
-- TypeScript 6
-- Vite 8
-- Electron 43
-- NW.js
-- Vue, React et Svelte
-- Vitest
-- GitHub Actions
-
-## Installation pour le développement
-
-Prérequis :
-
-- Node.js 22.13 ou plus récent ;
-- npm 10.9 ou plus récent ;
-- Git.
-
-```bash
-git clone https://github.com/Endymi0n74/Hakuneko-next.git
-cd Hakuneko-next
-npm run npm:clean-install
+npm --workspace=web run check
+npm --workspace=web run build
 ```
 
-Le projet utilise des dépendances Git. La configuration npm doit donc autoriser leur récupération.
+## Test local
 
-## Lancer en développement
+Terminal 1 :
 
-Dans un premier terminal :
-
-```bash
+```powershell
 npm --workspace=web run serve:dev
 ```
 
-Dans un second terminal :
+Terminal 2 :
 
-```bash
+```powershell
 npm --workspace=app/electron run launch:dev
 ```
 
-## Construire l'application desktop
+## Annulation
 
-### Electron
-
-```bash
-npm --workspace=app/electron run bundle
+```powershell
+node .\restore-v1.4-clean-test.mjs
 ```
-
-Sortie :
-
-```text
-app/electron/bundle/
-```
-
-### NW.js
-
-```bash
-npm --workspace=app/nw run bundle
-```
-
-Sortie :
-
-```text
-app/nw/bundle/
-```
-
-La disponibilité des formats NW.js dépend de la plateforme et de l'état actuel des scripts de packaging.
-
-## Tests et vérifications
-
-```bash
-npm run check
-npm run test
-npm run test:e2e
-```
-
-Pour valider une vraie build Electron, extrais l'archive générée dans un dossier neuf et lance l'exécutable sans serveur Vite actif.
-
-## Releases automatisées
-
-Le workflow `.github/workflows/create-release.yml` :
-
-1. compile les applications desktop sur les runners disponibles ;
-2. collecte les fichiers générés ;
-3. crée ou met à jour une GitHub Release ;
-4. joint les archives et installateurs à la release.
-
-La première release publiée par ce fork est la version **1.0.0**.
-
-## Contribuer
-
-Consulte [CONTRIBUTING.md](CONTRIBUTING.md) avant d'envoyer une pull request.
-
-## Transparence
-
-Ce dépôt est un fork communautaire et personnel. Une partie importante du travail de maintenance, de packaging et de débogage a été réalisée avec l'aide d'outils d'IA, puis testée et validée sur des builds réelles.
-
-## Licence
-
-Le projet conserve la licence **Unlicense** déclarée par le dépôt.

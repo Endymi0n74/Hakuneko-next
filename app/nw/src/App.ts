@@ -43,14 +43,14 @@ async function OpenWindow() {
 
     const url = argv.origin ?? GetDefaultURL() ?? 'about:blank';
     const win = await new Promise<NWJS_Helpers.win>((resolve, reject) => nw.Window.open(url, {
-        id: 'hakuneko',
+        id: 'HakuNeko-Next',
         show: url ? false : true,
         frame: url ? false : true,
         transparent: url ? true : false,
         width: 1280,
         height: 720,
         position: 'center',
-        //title: 'HakuNeko',
+        //title: 'HakuNeko-Next',
     }, win => win ? resolve(win) : reject()));
 
     if(!url) {

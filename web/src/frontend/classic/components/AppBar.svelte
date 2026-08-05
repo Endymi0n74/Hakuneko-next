@@ -16,6 +16,7 @@
 
     import  {Store as UI } from '../stores/Stores.svelte';
     import { GlobalSettings, Settings } from '../stores/Settings.svelte';
+    import { GetNextLocale } from '../lib/NextLocale';
 
     interface Props {
         onHome?: () => void;
@@ -23,6 +24,7 @@
     let { onHome }: Props  = $props();
 
     let isSideNavOpen: boolean = $state(false);
+    let nextLocale = $derived(GetNextLocale(GlobalSettings.LocaleID));
 
     let winMaximized = $state(false);
 
@@ -65,7 +67,7 @@
             <Button
                 class="clickable"
                 icon={Bookmark}
-                iconDescription={'Bookmarks'}
+                iconDescription={nextLocale.bookmarks}
                 kind="ghost"
                 tooltipPosition="bottom"
                 tooltipAlignment="center"
@@ -77,8 +79,8 @@
             />
         {/if}
         <div id="AppTitle" class:padding-left={Settings.SidenavIconsOnTop.Value}>
-            {GlobalSettings.Locale.Frontend_Product_Title()}
-            <span class="appdesc">{GlobalSettings.Locale.Frontend_Product_Description()}</span
+            HakuNeko-Next (=^･ω･^=)
+            <span class="appdesc">{nextLocale.productDescription}</span
             >
         </div>
     </div>

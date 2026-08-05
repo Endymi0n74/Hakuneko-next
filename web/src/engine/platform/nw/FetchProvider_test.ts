@@ -145,7 +145,7 @@ describe('FetchProvider', () => {
             const testee = fixture.CreateTestee(true);
             const request = new Request('https://postman-echo.com/get', {
                 headers: {
-                    'User-Agent': 'HakuNeko',
+                    'User-Agent': 'HakuNeko-Next',
                     'Referer': 'http://hakuneko.app/'
                 }
             });
@@ -162,7 +162,7 @@ describe('FetchProvider', () => {
                 method: 'POST',
                 body: JSON.stringify({ a: 1, b: 2 }),
                 headers: {
-                    'User-Agent': 'HakuNeko',
+                    'User-Agent': 'HakuNeko-Next',
                     'Referer': 'http://hakuneko.app/',
                     'Content-Type': 'application/json'
                 }

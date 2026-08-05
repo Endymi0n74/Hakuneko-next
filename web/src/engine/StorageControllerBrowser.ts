@@ -1,6 +1,6 @@
 import { type StorageController, Store } from './StorageController';
 
-const DataBase = 'HakuNeko';
+const DataBase = 'HakuNeko-Next';
 
 const enum InternalStore {
     TemporaryData = 'TemporaryData',

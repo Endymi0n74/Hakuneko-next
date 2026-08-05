@@ -382,6 +382,11 @@ export abstract class FetchProvider {
         delay = 0,
         timeout = 60_000
     ): Promise<T> {
+        const requestID =
+            `${Date.now()}-${Math.random()
+                .toString(36)
+                .slice(2, 8)}`;
+
         const detectInteractiveWAF = async (): Promise<boolean> => {
             try {
                 return await win.ExecuteScript<boolean>(`
@@ -402,7 +407,7 @@ export abstract class FetchProvider {
                         );
                     })()
                 `);
-            } catch {
+            } catch(error) {
                 return false;
             }
         };
@@ -442,8 +447,7 @@ export abstract class FetchProvider {
                 } else {
                     win.Close();
                 }
-            } catch {
-                // The remote window may already be closed.
+            } catch(error) {
             }
         };
 
