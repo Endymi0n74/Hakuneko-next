@@ -1,171 +1,151 @@
 # HakuNeko Next
 
-> Un fork communautaire de **HakuNeko** orienté application desktop, automatisation et nouvelles fonctionnalités.
+Fork desktop de **HakuNeko** destiné au téléchargement et à la consultation de mangas, d'animes et de romans.
 
----
+Cette version met l'accent sur des applications de bureau autonomes avec Electron et NW.js, ainsi que sur la publication automatisée de releases Windows, macOS et Linux avec GitHub Actions.
 
-## 📸 Aperçu
+## Télécharger
 
+Les versions prêtes à l'emploi sont disponibles dans la section [Releases](../../releases).
 
----
+Sous Windows, télécharge l'archive correspondant à ton architecture, extrais-la dans un dossier puis lance l'exécutable HakuNeko.
 
-# À propos
+> Le projet est en développement actif. Certaines plateformes ou fonctions peuvent encore nécessiter des ajustements.
 
-**HakuNeko Next** est un fork du projet **HakuNeko**.
+## Fonctionnalités
 
-Ce fork n'a pas pour vocation de remplacer le projet d'origine, mais de poursuivre son évolution en expérimentant de nouvelles fonctionnalités, en améliorant le packaging desktop et en automatisant la publication des builds.
+- Client desktop Electron autonome.
+- Builds NW.js lorsque la plateforme est prise en charge.
+- Interface web embarquée dans l'application desktop.
+- Recherche et navigation dans les catalogues pris en charge.
+- Téléchargement de chapitres et gestion locale des fichiers.
+- Builds automatisés pour Windows, macOS et Linux.
+- Publication automatique des fichiers compilés dans GitHub Releases.
 
-Un immense merci aux développeurs et contributeurs du projet original, sans lesquels ce fork n'existerait pas.
+## Vibe coding et assistance IA
 
----
+Ce fork est développé principalement selon une approche de **vibe coding assistée par IA**.
 
-# Pourquoi ce fork ?
+Les outils d'intelligence artificielle servent à explorer des solutions, produire ou modifier du code, analyser les erreurs de compilation et accélérer le débogage. Les modifications ne sont toutefois pas considérées comme terminées uniquement parce qu'elles ont été générées par une IA.
 
-L'objectif est de proposer une version plus orientée **desktop** avec notamment :
+Avant publication, les changements sont autant que possible :
 
-- 🖥️ une application Electron autonome ;
-- 📦 des releases générées automatiquement ;
-- 🔄 le chargement automatique des chapitres ;
-- 👀 la surveillance automatique des nouveaux chapitres ;
-- ⏱️ des vérifications périodiques configurables ;
-- ⚡ une chaîne de build modernisée ;
-- 🛠️ des améliorations progressives de l'expérience utilisateur.
+- compilés localement ;
+- testés dans l'application desktop ;
+- vérifiés dans GitHub Actions ;
+- corrigés à partir des erreurs réellement observées ;
+- validés manuellement sur une build distribuable.
 
----
+Plus de détails sont disponibles dans [docs/VIBE_CODING.md](docs/VIBE_CODING.md).
 
-# Fonctionnalités
+## Outils utilisés
 
-## 📚 Téléchargement
+### Développement assisté
 
-- Mangas
+- ChatGPT / OpenAI
+- Codex
+- GitHub Copilot
+- Visual Studio Code
 
----
+### Stack technique
 
-## 🔍 Recherche
+- Node.js 22
+- npm
+- TypeScript 6
+- Vite 8
+- Electron 43
+- NW.js
+- Vue, React et Svelte
+- Vitest
+- GitHub Actions
 
-Recherche parmi les sources supportées.
+## Installation pour le développement
 
----
+Prérequis :
 
-## 🔄 Chargement automatique des chapitres
-
-L'application peut mettre à jour automatiquement la liste des chapitres disponibles d'une série.
-
----
-
-## 👀 Surveillance des séries
-
-Une série peut être surveillée automatiquement.
-
-À intervalle régulier, HakuNeko Next vérifie :
-
-- si de nouveaux chapitres sont disponibles ;
-- si la liste doit être actualisée ;
-- si des téléchargements peuvent être lancés.
-
-Fini les vérifications manuelles répétitives.
-
----
-
-## 🖥️ Application desktop
-
-- Windows
-- Linux
-- macOS
-
----
-
-# Installation
-
-Téléchargez la dernière version depuis **Releases**.
-
-Décompressez l'archive puis lancez **HakuNeko**.
-
-Aucune installation n'est nécessaire.
-
----
-
-# Développement
-
-Installation :
+- Node.js 22.13 ou plus récent ;
+- npm 10.9 ou plus récent ;
+- Git.
 
 ```bash
+git clone https://github.com/Endymi0n74/Hakuneko-next.git
+cd Hakuneko-next
 npm run npm:clean-install
 ```
 
-Développement :
+Le projet utilise des dépendances Git. La configuration npm doit donc autoriser leur récupération.
+
+## Lancer en développement
+
+Dans un premier terminal :
 
 ```bash
 npm --workspace=web run serve:dev
+```
 
+Dans un second terminal :
+
+```bash
 npm --workspace=app/electron run launch:dev
 ```
 
-Build :
+## Construire l'application desktop
+
+### Electron
 
 ```bash
 npm --workspace=app/electron run bundle
 ```
 
----
+Sortie :
 
-# Développement assisté par IA
+```text
+app/electron/bundle/
+```
 
-Ce projet est développé selon une approche de **développement assisté par intelligence artificielle**.
+### NW.js
 
-Des outils comme **ChatGPT**, **Codex** et **GitHub Copilot** sont utilisés pour accélérer :
+```bash
+npm --workspace=app/nw run bundle
+```
 
-- le développement ;
-- le refactoring ;
-- le débogage ;
-- la documentation ;
-- le packaging.
+Sortie :
 
-Chaque modification est ensuite :
+```text
+app/nw/bundle/
+```
 
-- relue ;
-- compilée ;
-- testée localement ;
-- validée dans GitHub Actions ;
-- vérifiée sur une véritable build desktop avant publication.
+La disponibilité des formats NW.js dépend de la plateforme et de l'état actuel des scripts de packaging.
 
-L'objectif est d'accélérer le développement tout en conservant une validation humaine.
+## Tests et vérifications
 
----
+```bash
+npm run check
+npm run test
+npm run test:e2e
+```
 
-# Technologies
+Pour valider une vraie build Electron, extrais l'archive générée dans un dossier neuf et lance l'exécutable sans serveur Vite actif.
 
-- Electron
-- TypeScript
-- Vite
-- Node.js
-- GitHub Actions
-- Vitest
+## Releases automatisées
 
----
+Le workflow `.github/workflows/create-release.yml` :
 
-# Releases
+1. compile les applications desktop sur les runners disponibles ;
+2. collecte les fichiers générés ;
+3. crée ou met à jour une GitHub Release ;
+4. joint les archives et installateurs à la release.
 
-Les versions sont générées automatiquement via GitHub Actions.
+La première release publiée par ce fork est la version **1.0.0**.
 
-Chaque release contient les applications desktop disponibles.
+## Contribuer
 
----
+Consulte [CONTRIBUTING.md](CONTRIBUTING.md) avant d'envoyer une pull request.
 
-# Contribution
+## Transparence
 
-Les contributions sont les bienvenues.
+Ce dépôt est un fork communautaire et personnel. Une partie importante du travail de maintenance, de packaging et de débogage a été réalisée avec l'aide d'outils d'IA, puis testée et validée sur des builds réelles.
 
-Merci de consulter **CONTRIBUTING.md** avant d'ouvrir une Pull Request.
+## Licence
 
----
-
-# Remerciements
-
-Tous nos remerciements aux développeurs et contributeurs du projet **HakuNeko** pour leur travail, qui a rendu ce fork possible.
-
----
-
-# Licence
-
-Ce fork conserve la licence **Unlicense** du projet d'origine.
+Le projet conserve la licence **Unlicense** déclarée par le dépôt.
