@@ -14,7 +14,7 @@ import { CreateRemoteProcedureCallManager } from './platform/RemoteProcedureCall
 import { CreateRemoteProcedureCallContract } from './platform/RemoteProcedureCallContract';
 import type { IFrontendInfo } from '../frontend/IFrontend';
 import { Observable } from './Observable';
-import { SetInterval, ClearInterval } from './BackgroundTimers';
+import { ChapterMonitor } from './library/ChapterMonitor';
 
 export class HakuNeko {
 
@@ -26,16 +26,56 @@ export class HakuNeko {
     readonly #itemflagManager: ItemflagManager;
     readonly #downloadManager: DownloadManager;
     readonly #pastedClipboardURL = new Observable<URL>(null);
-    #newContentCheckIntervalID?: number;
+    readonly #chapterMonitor: ChapterMonitor;
 
     constructor() {
         this.#storageController = CreateStorageController();
         this.#settingsManager = new SettingsManager(this.#storageController);
         this.#featureFlags = new FeatureFlags(this.#settingsManager);
-        this.#pluginController = new PluginController(this.#storageController, this.#settingsManager);
-        this.#bookmarkPlugin = new BookmarkPlugin(this.#storageController, this.#pluginController, new InteractiveFileContentProvider());
+        this.#pluginController = new PluginController(
+            this.#storageController,
+            this.#settingsManager
+        );
+        this.#bookmarkPlugin = new BookmarkPlugin(
+            this.#storageController,
+            this.#pluginController,
+            new InteractiveFileContentProvider()
+        );
         this.#itemflagManager = new ItemflagManager(this.#storageController);
         this.#downloadManager = new DownloadManager(this.#storageController);
+
+        this.#chapterMonitor = new ChapterMonitor(
+            this.#bookmarkPlugin,
+            this.#settingsManager,
+            {
+                onNewContent: async statuses => {
+                    if(statuses.length === 0) {
+                        return;
+                    }
+
+                    const scope = this.SettingsManager.OpenScope();
+
+                    if(!scope.Get<Check>(
+                        GlobalKey.AutoDownloadNewContent
+                    ).Value) {
+                        return;
+                    }
+
+                    await this.BookmarkPlugin.AutoDownloadNewContent(
+                        scope.Get<Numeric>(
+                            GlobalKey.AutoDownloadNewContentMaxItems
+                        ).Value,
+                        scope.Get<Check>(
+                            GlobalKey.AutoDownloadIgnoreSpecials
+                        ).Value,
+                        scope.Get<Numeric>(
+                            GlobalKey.AutoDownloadDelay
+                        ).Value
+                    );
+                }
+            }
+        );
+
         SetupFetchProvider(this.#featureFlags);
     }
 
@@ -45,53 +85,7 @@ export class HakuNeko {
         await InitGlobalSettings(this.SettingsManager, frontends);
         CreateRemoteProcedureCallManager(this.#settingsManager);
         CreateRemoteProcedureCallContract();
-        // Preload bookmarks flags to show content to view, then keep re-checking periodically for as long as enabled
-        const scope = this.SettingsManager.OpenScope();
-        const settingCheckNewContent = scope.Get<Check>(GlobalKey.CheckNewContent);
-        const settingCheckNewContentPeriod = scope.Get<Numeric>(GlobalKey.CheckNewContentPeriod);
-        settingCheckNewContent.Subscribe(() => this.#ScheduleNewContentCheck());
-        settingCheckNewContentPeriod.Subscribe(() => this.#ScheduleNewContentCheck());
-        this.#ScheduleNewContentCheck();
-
-    }
-
-    async #PerformNewContentCheck(): Promise<void> {
-        try {
-            console.log(`[HakuNeko] Checking ${this.BookmarkPlugin.Entries.Value.length} bookmark(s) for new content ...`);
-            await this.BookmarkPlugin.RefreshAllFlags();
-            const autoDownloadNewContent = this.SettingsManager.OpenScope().Get<Check>(GlobalKey.AutoDownloadNewContent).Value;
-            if (autoDownloadNewContent) {
-                const maxItemsPerBookmark = this.SettingsManager.OpenScope().Get<Numeric>(GlobalKey.AutoDownloadNewContentMaxItems).Value;
-                const ignoreSpecials = this.SettingsManager.OpenScope().Get<Check>(GlobalKey.AutoDownloadIgnoreSpecials).Value;
-                const delayMs = this.SettingsManager.OpenScope().Get<Numeric>(GlobalKey.AutoDownloadDelay).Value;
-                await this.BookmarkPlugin.AutoDownloadNewContent(maxItemsPerBookmark, ignoreSpecials, delayMs);
-            }
-            console.log('[HakuNeko] New content check complete.');
-        } catch (error) {
-            console.warn(error);
-        }
-    }
-
-    /**
-     * (Re-)schedule the recurring new-content check based on the current {@link GlobalKey.CheckNewContent}
-     * and {@link GlobalKey.CheckNewContentPeriod} settings. Safe to call repeatedly (e.g. whenever either
-     * setting changes) - it always clears any previously running timer first.
-     */
-    #ScheduleNewContentCheck(): void {
-        if (this.#newContentCheckIntervalID !== undefined) {
-            ClearInterval(this.#newContentCheckIntervalID);
-            this.#newContentCheckIntervalID = undefined;
-        }
-        const scope = this.SettingsManager.OpenScope();
-        const enabled = scope.Get<Check>(GlobalKey.CheckNewContent).Value;
-        if (!enabled) {
-            return;
-        }
-        // Run once immediately ...
-        this.#PerformNewContentCheck();
-        // ... then keep repeating on the configured period
-        const periodMinutes = scope.Get<Numeric>(GlobalKey.CheckNewContentPeriod).Value;
-        SetInterval(() => this.#PerformNewContentCheck(), Math.max(periodMinutes, 1) * 60 * 1000).then(id => this.#newContentCheckIntervalID = id);
+        this.#chapterMonitor.Initialize();
     }
 
     public get Tags() {
@@ -120,6 +114,10 @@ export class HakuNeko {
 
     public get DownloadManager(): DownloadManager {
         return this.#downloadManager;
+    }
+
+    public get ChapterMonitor(): ChapterMonitor {
+        return this.#chapterMonitor;
     }
 
     public get PastedClipboardURL(): Observable<URL> {
