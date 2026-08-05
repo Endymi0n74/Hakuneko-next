@@ -22,6 +22,15 @@ export type BookmarkExportResult = {
     exported: number;
 }
 
+export type AutoDownloadReport = {
+    seriesProcessed: number;
+    chaptersDetected: number;
+    chaptersQueued: number;
+    skippedSpecials: number;
+    skippedByLimit: number;
+    errors: number;
+}
+
 const defaultBookmarkFileType: FilePickerAcceptType = {
     description: 'HakuNeko Bookmarks',
     accept: {
@@ -113,30 +122,103 @@ export class BookmarkPlugin extends MediaContainer<Bookmark> {
      * @param ignoreSpecials - When true, chapters whose title looks like bonus/special content are skipped.
      * @param delayMs - Delay to wait between each chapter that gets queued, to avoid hammering the website.
      */
-    public async AutoDownloadNewContent(maxItemsPerBookmark = 0, ignoreSpecials = true, delayMs = 0): Promise<void> {
-        for (const bookmark of super.Entries.Value) {
+    public async AutoDownloadNewContent(
+        maxItemsPerBookmark = 0,
+        ignoreSpecials = true,
+        delayMs = 0,
+        bookmarkKeys?: ReadonlySet<string>
+    ): Promise<AutoDownloadReport> {
+        const report: AutoDownloadReport = {
+            seriesProcessed: 0,
+            chaptersDetected: 0,
+            chaptersQueued: 0,
+            skippedSpecials: 0,
+            skippedByLimit: 0,
+            errors: 0
+        };
+
+        const bookmarks = bookmarkKeys
+            ? super.Entries.Value.filter(
+                bookmark => bookmarkKeys.has(bookmark.StorageKey)
+            )
+            : super.Entries.Value;
+
+        for(const bookmark of bookmarks) {
+            report.seriesProcessed++;
+
             try {
-                let newEntries = await bookmark.GetUnflaggedContent();
-                if (ignoreSpecials) {
-                    newEntries = newEntries.filter(entry => !BookmarkPlugin.SpecialChapterPattern.test(entry.Title));
+                const unflaggedEntries =
+                    await bookmark.GetUnflaggedContent();
+
+                report.chaptersDetected += unflaggedEntries.length;
+
+                let eligibleEntries = unflaggedEntries;
+
+                if(ignoreSpecials) {
+                    eligibleEntries = eligibleEntries.filter(entry => {
+                        const isSpecial =
+                            BookmarkPlugin.SpecialChapterPattern.test(
+                                entry.Title
+                            );
+
+                        if(isSpecial) {
+                            report.skippedSpecials++;
+                        }
+
+                        return !isSpecial;
+                    });
                 }
-                if (newEntries.length === 0) {
+
+                const toDownload = (
+                    maxItemsPerBookmark > 0
+                        ? eligibleEntries.slice(
+                            0,
+                            maxItemsPerBookmark
+                        )
+                        : eligibleEntries
+                ) as StoreableMediaContainer<MediaItem>[];
+
+                report.skippedByLimit += Math.max(
+                    eligibleEntries.length - toDownload.length,
+                    0
+                );
+
+                if(toDownload.length === 0) {
                     continue;
                 }
-                const toDownload = (maxItemsPerBookmark > 0 ? newEntries.slice(0, maxItemsPerBookmark) : newEntries) as StoreableMediaContainer<MediaItem>[];
-                console.log(`[HakuNeko] Auto-download: "${bookmark.Title}" has ${newEntries.length} new chapter(s), queuing ${toDownload.length}`);
-                for (const entry of toDownload) {
+
+                console.log(
+                    `[HakuNeko] Auto-download: "${bookmark.Title}" `
+                    + `has ${unflaggedEntries.length} new chapter(s), `
+                    + `queuing ${toDownload.length}`
+                );
+
+                for(const entry of toDownload) {
                     await HakuNeko.DownloadManager.Enqueue(entry);
-                    await HakuNeko.ItemflagManager.FlagItem(entry, FlagType.Viewed);
-                    if (delayMs > 0) {
+
+                    await HakuNeko.ItemflagManager.FlagItem(
+                        entry,
+                        FlagType.Viewed
+                    );
+
+                    report.chaptersQueued++;
+
+                    if(delayMs > 0) {
                         await Delay(delayMs);
                     }
                 }
-            } catch (error) {
-                // Do not let a single broken bookmark (e.g. missing website) interrupt the others
-                console.warn(error);
+            } catch(error) {
+                report.errors++;
+
+                console.warn(
+                    `[HakuNeko] Auto-download failed for `
+                    + `"${bookmark.Title}"`,
+                    error
+                );
             }
         }
+
+        return report;
     }
 
     public async Import(): Promise<BookmarkImportResult> {

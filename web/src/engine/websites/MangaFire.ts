@@ -1,6 +1,10 @@
 import { Tags } from '../Tags';
 import icon from './MangaFire.webp';
-import { FetchJSON, FetchWindowScript } from '../platform/FetchProvider';
+import {
+    FetchJSON,
+    FetchWindowPreloadScript,
+    FetchWindowScript
+} from '../platform/FetchProvider';
 import {
     DecoratableMangaScraper,
     Manga,
@@ -132,130 +136,194 @@ export default class extends DecoratableMangaScraper {
             language: string;
         };
 
-        const rows = await FetchWindowScript<Row[]>(
+        const preload = `
+        (() => {
+            const captures = [];
+
+            const store = (
+                url,
+                status,
+                payload
+            ) => {
+                try {
+                    const uri = new URL(
+                        String(url),
+                        location.origin
+                    );
+
+                    if(
+                        !uri.pathname.includes(
+                            '/api/titles/${manga.Identifier}/'
+                        )
+                        || (
+                            !uri.pathname.endsWith('/chapters')
+                            && !uri.pathname.endsWith('/volumes')
+                        )
+                    ) {
+                        return;
+                    }
+
+                    captures.push({
+                        url: uri.href,
+                        status,
+                        payload
+                    });
+                } catch {
+                    // Ignore malformed and unrelated URLs.
+                }
+            };
+
+            Object.defineProperty(
+                window,
+                '__hakunekoMangaFireCaptures',
+                {
+                    value: captures,
+                    configurable: false,
+                    writable: false
+                }
+            );
+
+            const originalFetch =
+                window.fetch.bind(window);
+
+            window.fetch = async (...arguments_) => {
+                const response =
+                    await originalFetch(...arguments_);
+
+                try {
+                    const input = arguments_[0];
+
+                    const url = typeof input === 'string'
+                        ? input
+                        : input?.url ?? response.url;
+
+                    const payload =
+                        await response.clone().json();
+
+                    store(
+                        url,
+                        response.status,
+                        payload
+                    );
+                } catch {
+                    // Ignore non-JSON responses.
+                }
+
+                return response;
+            };
+
+            const originalOpen =
+                XMLHttpRequest.prototype.open;
+
+            const originalSend =
+                XMLHttpRequest.prototype.send;
+
+            XMLHttpRequest.prototype.open = function(
+                method,
+                url,
+                ...arguments_
+            ) {
+                this.__hakunekoMangaFireURL =
+                    String(url);
+
+                return originalOpen.call(
+                    this,
+                    method,
+                    url,
+                    ...arguments_
+                );
+            };
+
+            XMLHttpRequest.prototype.send = function(
+                ...arguments_
+            ) {
+                this.addEventListener('load', () => {
+                    try {
+                        store(
+                            this.__hakunekoMangaFireURL
+                                ?? this.responseURL,
+                            this.status,
+                            JSON.parse(this.responseText)
+                        );
+                    } catch {
+                        // Ignore non-JSON responses.
+                    }
+                });
+
+                return originalSend.apply(
+                    this,
+                    arguments_
+                );
+            };
+        })();
+        `;
+
+        const rows = await FetchWindowPreloadScript<Row[]>(
             new Request(
                 new URL(
                     `./title/${manga.Identifier}`,
                     this.URI
                 )
             ),
+            preload,
             `
             new Promise(async resolve => {
                 const sleep = milliseconds =>
                     new Promise(done => setTimeout(done, milliseconds));
-
-                const languageButtons = [
-                    { code: 'en', text: 'English' },
-                    { code: 'fr', text: 'French' },
-                    { code: 'ja', text: 'Japanese' },
-                    { code: 'pt-br', text: 'Portuguese (Br)' }
-                ];
 
                 const normalize = value =>
                     (value ?? '')
                         .replace(/\\s+/g, ' ')
                         .trim();
 
-                const extract = language => [
-                    ...document.querySelectorAll(
-                        'a[href*="/chapter/"], a[href*="/chapter-"]'
-                    )
-                ]
-                    .map(link => {
-                        const href =
-                            link.getAttribute('href')
-                            ?? link.href
-                            ?? '';
+                const captures =
+                    window.__hakunekoMangaFireCaptures
+                    ?? [];
 
-                        const id = (
-                            href.match(/\\/chapter\\/(\\d+)/)
-                            ?? href.match(/chapter-(\\d+)/)
-                            ?? []
-                        )[1];
+                const languages = [
+                    { code: 'en', label: 'English' },
+                    { code: 'fr', label: 'French' },
+                    { code: 'ja', label: 'Japanese' },
+                    { code: 'pt-br', label: 'Portuguese (Br)' },
+                    { code: 'es', label: 'Spanish' }
+                ];
 
-                        const text = normalize(
-                            link.textContent
-                        );
+                const waitForAnyCapture = async () => {
+                    const started = Date.now();
 
-                        return {
-                            id,
-                            text,
-                            language
-                        };
-                    })
-                    .filter(row => row.id && row.text);
-
-                const signature = rows =>
-                    rows
-                        .slice(0, 5)
-                        .map(row => row.id + '|' + row.text)
-                        .join('||');
-
-                const waitForLanguage = async (
-                    language,
-                    beforeSignature
-                ) => {
-                    const start = Date.now();
-
-                    while(Date.now() - start < 10000) {
-                        const rows = extract(language);
-
-                        const requestSeen = performance
-                            .getEntriesByType('resource')
-                            .some(entry => {
-                                if(
-                                    !entry.name.includes(
-                                        '/api/titles/${manga.Identifier}/chapters?'
-                                    )
-                                ) {
-                                    return false;
-                                }
-
-                                return new URL(entry.name)
-                                    .searchParams
-                                    .get('language') === language;
-                            });
-
-                        if(
-                            rows.length > 0
-                            && (
-                                requestSeen
-                                || signature(rows) !== beforeSignature
-                            )
-                        ) {
-                            return rows;
+                    while(Date.now() - started < 20000) {
+                        if(captures.length > 0) {
+                            return true;
                         }
 
-                        await sleep(250);
+                        await sleep(200);
                     }
 
-                    return [];
+                    return false;
                 };
 
-                const getDropdownTrigger = () => {
-                    return [
-                        ...document.querySelectorAll('button')
-                    ].find(button => {
-                        if(
-                            button.closest(
-                                '.dropdown__menu[role="menu"]'
-                            )
-                        ) {
-                            return false;
-                        }
+                const findLanguageTrigger = () => [
+                    ...document.querySelectorAll('button')
+                ].find(button => {
+                    if(
+                        button.closest(
+                            '.dropdown__menu[role="menu"]'
+                        )
+                    ) {
+                        return false;
+                    }
 
-                        const text = normalize(
-                            button.textContent
-                        );
+                    const text = normalize(
+                        button.textContent
+                    );
 
-                        return languageButtons.some(
-                            language =>
-                                text.includes(language.text)
-                        );
-                    });
-                };
+                    return languages.some(
+                        language =>
+                            text.includes(language.label)
+                    );
+                });
 
-                const openDropdown = async () => {
+                const openLanguageMenu = async () => {
                     const existing = document.querySelector(
                         '.dropdown__menu[role="menu"]'
                     );
@@ -264,7 +332,19 @@ export default class extends DecoratableMangaScraper {
                         return existing;
                     }
 
-                    const trigger = getDropdownTrigger();
+                    const started = Date.now();
+                    let trigger;
+
+                    while(
+                        !trigger
+                        && Date.now() - started < 10000
+                    ) {
+                        trigger = findLanguageTrigger();
+
+                        if(!trigger) {
+                            await sleep(200);
+                        }
+                    }
 
                     if(!trigger) {
                         return null;
@@ -272,9 +352,9 @@ export default class extends DecoratableMangaScraper {
 
                     trigger.click();
 
-                    const start = Date.now();
+                    const menuStarted = Date.now();
 
-                    while(Date.now() - start < 3000) {
+                    while(Date.now() - menuStarted < 4000) {
                         const menu = document.querySelector(
                             '.dropdown__menu[role="menu"]'
                         );
@@ -289,14 +369,55 @@ export default class extends DecoratableMangaScraper {
                     return null;
                 };
 
-                const selectLanguage = async language => {
-                    const beforeRows = extract(language.code);
-                    const beforeSignature = signature(beforeRows);
+                const waitForLanguageCapture = async (
+                    code,
+                    previousCount
+                ) => {
+                    const started = Date.now();
 
-                    const menu = await openDropdown();
+                    while(Date.now() - started < 15000) {
+                        const matches = captures.filter(
+                            capture => {
+                                try {
+                                    return new URL(
+                                        capture.url
+                                    ).searchParams.get('language')
+                                        === code;
+                                } catch {
+                                    return false;
+                                }
+                            }
+                        );
+
+                        if(matches.length > previousCount) {
+                            return true;
+                        }
+
+                        await sleep(200);
+                    }
+
+                    return false;
+                };
+
+                const selectLanguage = async language => {
+                    const previousCount = captures.filter(
+                        capture => {
+                            try {
+                                return new URL(
+                                    capture.url
+                                ).searchParams.get('language')
+                                    === language.code;
+                            } catch {
+                                return false;
+                            }
+                        }
+                    ).length;
+
+                    const menu =
+                        await openLanguageMenu();
 
                     if(!menu) {
-                        return [];
+                        return;
                     }
 
                     const option = [
@@ -305,63 +426,192 @@ export default class extends DecoratableMangaScraper {
                         )
                     ].find(button =>
                         normalize(button.textContent)
-                            .includes(language.text)
+                            .includes(language.label)
                     );
 
                     if(!option) {
-                        return [];
+                        return;
                     }
 
                     option.click();
 
-                    return waitForLanguage(
+                    await waitForLanguageCapture(
                         language.code,
-                        beforeSignature
+                        previousCount
                     );
+                };
+
+                await waitForAnyCapture();
+
+                for(const language of languages) {
+                    try {
+                        await selectLanguage(language);
+                    } catch(error) {
+                        console.warn(
+                            '[HakuNeko] MangaFire language capture failed',
+                            language.code,
+                            error
+                        );
+                    }
+                }
+
+                const getObjects = payload => {
+                    const objects = [];
+                    const visited = new Set();
+
+                    const walk = value => {
+                        if(
+                            !value
+                            || typeof value !== 'object'
+                            || visited.has(value)
+                        ) {
+                            return;
+                        }
+
+                        visited.add(value);
+
+                        if(!Array.isArray(value)) {
+                            objects.push(value);
+                        }
+
+                        for(const child of Object.values(value)) {
+                            walk(child);
+                        }
+                    };
+
+                    walk(payload);
+
+                    return objects;
+                };
+
+                const getFirst = (
+                    object,
+                    names
+                ) => {
+                    for(const name of names) {
+                        const value = object?.[name];
+
+                        if(
+                            value !== undefined
+                            && value !== null
+                            && value !== ''
+                        ) {
+                            return value;
+                        }
+                    }
+
+                    return undefined;
                 };
 
                 const result = [];
                 const seen = new Set();
 
-                const append = rows => {
-                    for(const row of rows) {
-                        const key =
-                            row.language + '|' + row.id;
-
-                        if(!seen.has(key)) {
-                            seen.add(key);
-                            result.push(row);
-                        }
+                for(const capture of captures) {
+                    if(
+                        capture.status < 200
+                        || capture.status >= 300
+                    ) {
+                        continue;
                     }
-                };
 
-                /*
-                 * Preserve the language initially shown by MangaFire.
-                 */
-                const initialRows = extract('en');
-                append(initialRows);
+                    let language = 'en';
 
-                /*
-                 * Then load each real dropdown option using the exact DOM
-                 * structure currently used by MangaFire:
-                 *
-                 * .dropdown__menu[role="menu"]
-                 * button.dropdown__item
-                 */
-                for(const language of languageButtons) {
                     try {
-                        append(
-                            await selectLanguage(language)
-                        );
+                        language = new URL(
+                            capture.url
+                        ).searchParams.get('language')
+                            ?? 'en';
                     } catch {
-                        // Keep every language already collected.
+                        // Keep the English fallback.
+                    }
+
+                    for(const object of getObjects(
+                        capture.payload
+                    )) {
+                        const id = getFirst(
+                            object,
+                            [
+                                'id',
+                                'hid',
+                                'chapterId',
+                                'chapter_id'
+                            ]
+                        );
+
+                        const number = getFirst(
+                            object,
+                            [
+                                'number',
+                                'chapter',
+                                'chapterNumber',
+                                'chapter_number',
+                                'no',
+                                'num'
+                            ]
+                        );
+
+                        if(
+                            id === undefined
+                            || number === undefined
+                        ) {
+                            continue;
+                        }
+
+                        const name = getFirst(
+                            object,
+                            [
+                                'name',
+                                'title',
+                                'chapterName',
+                                'chapter_name'
+                            ]
+                        );
+
+                        const key =
+                            language + '|' + id;
+
+                        if(seen.has(key)) {
+                            continue;
+                        }
+
+                        seen.add(key);
+
+                        result.push({
+                            id: String(id),
+                            text: [
+                                'Ch. ' + String(number),
+                                name === undefined
+                                    ? ''
+                                    : String(name)
+                            ]
+                                .filter(Boolean)
+                                .join(' - '),
+                            language
+                        });
                     }
                 }
+
+                console.log(
+                    '[HakuNeko] MangaFire diagnostics',
+                    {
+                        href: location.href,
+                        title: document.title,
+                        body:
+                            normalize(document.body?.innerText)
+                                .slice(0, 300),
+                        captureCount: captures.length,
+                        captureURLs: captures.map(
+                            capture => capture.url
+                        ),
+                        rowCount: result.length
+                    }
+                );
 
                 resolve(result);
             })
             `,
-            200
+            1500,
+            120_000
         );
 
         return rows.map(
@@ -369,37 +619,16 @@ export default class extends DecoratableMangaScraper {
                 id,
                 text,
                 language
-            }) => {
-                const match = text.match(
-                    /^(Ch\.?\s*\d+(?:\.\d+)?)\s*(.*)$/i
-                );
-
-                const [
-                    number,
-                    name
-                ] = match
-                    ? [
-                        match[1],
-                        match[2]
-                    ]
-                    : [
-                        text,
-                        ''
-                    ];
-
-                return new Chapter(
+            }) =>
+                new Chapter(
                     this,
                     manga,
                     id,
-                    [
-                        number,
-                        name
-                    ].joinTitleSegments(),
+                    text,
                     ...[
                         chapterLanguageMap.get(language)
                     ].filter(Boolean)
-                );
-            }
+                )
         );
     }
 

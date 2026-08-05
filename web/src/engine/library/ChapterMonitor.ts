@@ -1,4 +1,4 @@
-import { ClearInterval, SetInterval } from '../BackgroundTimers';
+﻿import { ClearInterval, SetInterval } from '../BackgroundTimers';
 import { Observable, ObservableArray, ObservableMap } from '../Observable';
 import type { Bookmark } from '../providers/Bookmark';
 import type { BookmarkPlugin } from '../providers/BookmarkPlugin';
@@ -70,6 +70,12 @@ export class ChapterMonitor {
 
     public readonly Summary =
         new Observable<LibrarySummary>(CreateEmptySummary());
+
+    public readonly LastAutoDownloadQueued =
+        new Observable<number>(0);
+
+    public readonly LastAutoDownloadSkipped =
+        new Observable<number>(0);
 
     #intervalID?: number;
     #initialized = false;
@@ -204,6 +210,18 @@ export class ChapterMonitor {
 
     public ClearEvents(): void {
         this.Events.Value = [];
+    }
+
+    public RecordEvent(event: LibraryEvent): void {
+        this.PushEvent(event);
+    }
+
+    public RecordAutoDownloadReport(
+        queuedCount: number,
+        skippedCount: number
+    ): void {
+        this.LastAutoDownloadQueued.Value = queuedCount;
+        this.LastAutoDownloadSkipped.Value = skippedCount;
     }
 
     private Schedule(): void {

@@ -43,6 +43,8 @@
     let lastChecked = $state<Date | null>(null);
     let checkedCount = $state(0);
     let totalCount = $state(0);
+    let lastQueuedCount = $state(0);
+    let lastSkippedCount = $state(0);
     let searchQuery = $state('');
     type SortKey = 'status' | 'title' | 'website' | 'known' | 'new' | 'checked';
     let sortKey = $state<SortKey>('status');
@@ -266,6 +268,12 @@
         const onTotalCount = (value: number) => {
             totalCount = value;
         };
+        const onLastQueuedCount = (value: number) => {
+            lastQueuedCount = value;
+        };
+        const onLastSkippedCount = (value: number) => {
+            lastSkippedCount = value;
+        };
         const onAutomaticCheck = (value: boolean) => {
             automaticCheck = value;
         };
@@ -292,6 +300,8 @@
         lastChecked = monitor.LastChecked.Value;
         checkedCount = monitor.CheckedCount.Value;
         totalCount = monitor.TotalCount.Value;
+        lastQueuedCount = monitor.LastAutoDownloadQueued.Value;
+        lastSkippedCount = monitor.LastAutoDownloadSkipped.Value;
 
         monitor.Statuses.Subscribe(onStatuses);
         monitor.History.Subscribe(onHistory);
@@ -300,6 +310,8 @@
         monitor.LastChecked.Subscribe(onLastChecked);
         monitor.CheckedCount.Subscribe(onCheckedCount);
         monitor.TotalCount.Subscribe(onTotalCount);
+        monitor.LastAutoDownloadQueued.Subscribe(onLastQueuedCount);
+        monitor.LastAutoDownloadSkipped.Subscribe(onLastSkippedCount);
         automaticCheckSetting.Subscribe(onAutomaticCheck);
         checkPeriodSetting.Subscribe(onCheckPeriod);
         autoDownloadSetting.Subscribe(onAutoDownload);
@@ -315,6 +327,8 @@
             monitor.LastChecked.Unsubscribe(onLastChecked);
             monitor.CheckedCount.Unsubscribe(onCheckedCount);
             monitor.TotalCount.Unsubscribe(onTotalCount);
+            monitor.LastAutoDownloadQueued.Unsubscribe(onLastQueuedCount);
+            monitor.LastAutoDownloadSkipped.Unsubscribe(onLastSkippedCount);
             automaticCheckSetting.Unsubscribe(onAutomaticCheck);
             checkPeriodSetting.Unsubscribe(onCheckPeriod);
             autoDownloadSetting.Unsubscribe(onAutoDownload);
@@ -370,7 +384,13 @@
             <span>
                 Nouveautés
                 {#if summary.newChapterCount > 0}
-                    ({summary.newChapterCount} chapitres)
+                    ({summary.newChapterCount} détectés
+                    {#if lastQueuedCount > 0}
+                        · {lastQueuedCount} ajoutés
+                    {/if}
+                    {#if lastSkippedCount > 0}
+                        · {lastSkippedCount} ignorés
+                    {/if})
                 {/if}
             </span>
         </Tile>
