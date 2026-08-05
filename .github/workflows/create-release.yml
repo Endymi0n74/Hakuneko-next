@@ -24,9 +24,11 @@ jobs:
           - os: windows-latest
             label: Windows
             artifact_suffix: windows
+
           - os: macos-latest
             label: macOS (untested)
             artifact_suffix: macos-untested
+
           - os: ubuntu-latest
             label: Linux (untested)
             artifact_suffix: linux-untested
@@ -47,6 +49,12 @@ jobs:
           node-version: 22.22.x
           cache: npm
 
+      - name: Show versions
+        shell: bash
+        run: |
+          node --version
+          npm --version
+
       - name: Setup Snapcraft
         if: startsWith(matrix.os, 'ubuntu')
         shell: bash
@@ -59,15 +67,20 @@ jobs:
       - name: Install NPM packages
         run: npm run npm:clean-install
 
-      - name: Build NW.js application
-        if: ${{ !startsWith(matrix.os, 'ubuntu') }}
+      # NW.js reste uniquement généré sous Windows.
+      # La build macOS NW.js échoue actuellement dans le script DMG d'origine
+      # à cause du nom de volume contenant un espace ("HakuNeko Next").
+      # NW.js n'est pas publié dans la GitHub Release, donc il ne doit pas
+      # bloquer les builds Electron macOS/Linux.
+      - name: Build NW.js application (Windows only)
+        if: startsWith(matrix.os, 'windows')
         run: npm run bundle --workspace app/nw
 
       - name: Build Electron application
         run: npm run bundle --workspace app/electron
 
       - name: Upload NW.js builds as workflow artifacts
-        if: ${{ !startsWith(matrix.os, 'ubuntu') }}
+        if: startsWith(matrix.os, 'windows')
         uses: actions/upload-artifact@v4
         with:
           name: alternative-builds-${{ matrix.artifact_suffix }}
@@ -94,11 +107,14 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
       - name: Prepare release information
         shell: bash
         run: |
           VERSION="$(node -p "JSON.parse(require('fs').readFileSync('package.json', 'utf8')).version")"
+
           echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
           echo "RELEASE_TAG=v${VERSION}" >> "$GITHUB_ENV"
           echo "RELEASE_NAME=HakuNeko Next v${VERSION}" >> "$GITHUB_ENV"
@@ -116,23 +132,42 @@ jobs:
           while IFS= read -r -d '' file; do
             directory="$(dirname "$file")"
             filename="$(basename "$file")"
-            extension="${filename##*.}"
+
+            case "$filename" in
+              *.tar.gz)
+                extension="tar.gz"
+                ;;
+              *)
+                extension="${filename##*.}"
+                ;;
+            esac
 
             case "$directory" in
               *macos-untested*)
                 architecture="$(echo "$filename" | grep -oE '(arm64|x64)' | tail -1)"
+
                 [ "$architecture" = "arm64" ] && architecture="ARM64"
+                [ -z "$architecture" ] && architecture="unknown"
+
                 target="HakuNeko-Next-v${VERSION}-macOS-${architecture}-UNTESTED.${extension}"
                 ;;
+
               *linux-untested*)
                 architecture="$(echo "$filename" | grep -oE '(arm64|x64|amd64)' | tail -1)"
+
                 [ "$architecture" = "amd64" ] && architecture="x64"
+                [ "$architecture" = "arm64" ] && architecture="ARM64"
+                [ -z "$architecture" ] && architecture="unknown"
+
                 target="HakuNeko-Next-v${VERSION}-Linux-${architecture}-UNTESTED.${extension}"
                 ;;
+
               *windows*)
-                # Windows ZIP files are already named by bundle-app-zip.mjs.
+                # Les archives Windows sont déjà nommées proprement
+                # par app/packaging/windows.mjs.
                 continue
                 ;;
+
               *)
                 continue
                 ;;
@@ -177,7 +212,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           IS_PRERELEASE: ${{ inputs.prerelease }}
         run: |
-          if gh release view "$RELEASE_TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+          if gh release view "$RELEASE_TAG" \
+            --repo "${{ github.repository }}" \
+            >/dev/null 2>&1
+          then
             gh release edit "$RELEASE_TAG" \
               --repo "${{ github.repository }}" \
               --title "$RELEASE_NAME"
@@ -222,3 +260,11 @@ jobs:
             "${RELEASE_FILES[@]}" \
             --repo "${{ github.repository }}" \
             --clobber
+
+      - name: Show published release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$RELEASE_TAG" \
+            --repo "${{ github.repository }}"
