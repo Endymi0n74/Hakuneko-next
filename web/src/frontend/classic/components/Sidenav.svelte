@@ -70,6 +70,15 @@
                         UI.selectedItem = undefined;
                     }}
                 />
+                <SideNavLink
+                    text={'Surveillance'}
+                    icon={EventsAlt}
+                    onclick={() => {
+                        UI.contentscreen = '/monitoring';
+                        UI.selectedMedia = undefined;
+                        UI.selectedItem = undefined;
+                    }}
+                />
             {/if}
             <SideNavLink
                 text={'Paste Media URL'}

@@ -3,6 +3,7 @@
 
     import Bookmarks from './Bookmarks.svelte';
     import Main from './Main.svelte';
+    import Monitoring from './Monitoring.svelte';
     import PathBar from './ContentPathBar.svelte';
 </script>
 
@@ -15,6 +16,8 @@
         <Main />
     {:else if UI.contentscreen === '/bookmarks'}
         <Bookmarks />
+    {:else if UI.contentscreen === '/monitoring'}
+        <Monitoring />
     {:else}
         Unknown content screen: {UI.contentscreen}
     {/if}
