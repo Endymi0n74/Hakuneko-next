@@ -5,7 +5,8 @@ import extract from 'extract-zip';
 import { download } from '../../tools.mjs';
 
 const pkgFile = 'package.json';
-const pkgConfig = JSON.parse(await fs.readFile(pkgFile));
+const pkgConfig = JSON.parse(await fs.readFile(pkgFile, 'utf8'));
+
 const dirRes = path.join('..', 'res');
 const dirApp = path.join('.', 'build');
 const dirOut = path.join('.', 'bundle');
@@ -13,60 +14,138 @@ const dirOut = path.join('.', 'bundle');
 const electronVersion = pkgConfig.devDependencies.electron;
 
 /**
- * Download a redistributable archive of Electron for the given parameters to the temp directory of the operating system.
- * Extract the content to the build directory which should be bundled for redistribution.
- * @param electronVersion ...
- * @param electronPlatform ...
- * @param electronArchitecture ...
+ * Download and extract an Electron runtime for the requested target.
  */
-async function redist(electronVersion, electronPlatform, electronArchitecture) {
-    const base = `electron-v${electronVersion}-${electronPlatform}-${electronArchitecture}`;
+async function redist(
+    version,
+    platform,
+    architecture
+) {
+    const base =
+        `electron-v${version}-${platform}-${architecture}`;
+
     const archive = `${base}.zip`;
-    const sourceFile = `https://github.com/electron/electron/releases/download/v${electronVersion}/${archive}`;
-    const tmpFile = path.resolve(os.tmpdir(), archive);
-    const electronDir = path.resolve(os.tmpdir(), base.replace(/^electron/i, pkgConfig.name));
+
+    const sourceFile =
+        `https://github.com/electron/electron/releases/download/`
+        + `v${version}/${archive}`;
+
+    const tmpFile = path.resolve(
+        os.tmpdir(),
+        archive
+    );
+
+    const runtimeDirectory = path.resolve(
+        os.tmpdir(),
+        base
+    );
+
     try {
         await fs.access(tmpFile);
-    } catch (error) {
-        console.log('Downloading:', sourceFile, '=>', '$TMP/' + path.basename(tmpFile));
+    } catch {
+        console.log(
+            'Downloading:',
+            sourceFile,
+            '=>',
+            '$TMP/' + path.basename(tmpFile)
+        );
+
         await download(sourceFile, tmpFile);
     }
-    console.log('Extracting:', '$TMP/' + path.basename(tmpFile), '=>', '$TMP/' + path.basename(electronDir));
-    await fs.rm(electronDir, { force: true, recursive: true });
-    await extract(tmpFile, { dir: electronDir });
-    return electronDir;
+
+    console.log(
+        'Extracting:',
+        '$TMP/' + path.basename(tmpFile),
+        '=>',
+        '$TMP/' + path.basename(runtimeDirectory)
+    );
+
+    await fs.rm(runtimeDirectory, {
+        force: true,
+        recursive: true
+    });
+
+    await extract(tmpFile, {
+        dir: runtimeDirectory
+    });
+
+    return runtimeDirectory;
 }
 
-let dirTemp;
-await fs.mkdir(dirOut, { recursive: true });
+await fs.mkdir(dirOut, {
+    recursive: true
+});
 
-if (process.platform === 'darwin') {
+if(process.platform === 'darwin') {
     const bundler = await import('./bundle-app-dmg.mjs');
-    dirTemp = await redist(electronVersion, process.platform, 'x64');
-    await bundler.bundle(dirApp, dirRes, dirTemp, dirOut);
-    dirTemp = await redist(electronVersion, process.platform, 'arm64');
-    await bundler.bundle(dirApp, dirRes, dirTemp, dirOut);
+
+    let runtime = await redist(
+        electronVersion,
+        process.platform,
+        'x64'
+    );
+
+    await bundler.bundle(
+        dirApp,
+        dirRes,
+        runtime,
+        dirOut
+    );
+
+    runtime = await redist(
+        electronVersion,
+        process.platform,
+        'arm64'
+    );
+
+    await bundler.bundle(
+        dirApp,
+        dirRes,
+        runtime,
+        dirOut
+    );
 }
 
-if (process.platform === 'win32') {
-    const portable = await import('./bundle-app-zip.mjs');
-    //const setup = await import('./bundle-app-iss.mjs');
-    dirTemp = await redist(electronVersion, process.platform, 'ia32');
-    await portable.bundle(dirApp, dirRes, dirTemp, dirOut);
-    //dirTemp = await redist(electronVersion, process.platform, 'ia32');
-    //await setup.bundle(dirApp, dirTemp);
-    dirTemp = await redist(electronVersion, process.platform, 'x64');
-    await portable.bundle(dirApp, dirRes, dirTemp, dirOut);
-    //dirTemp = await redist(electronVersion, process.platform, 'x64');
-    //await setup.bundle(dirApp, dirTemp);
-    dirTemp = await redist(electronVersion, process.platform, 'arm64');
-    await portable.bundle(dirApp, dirRes, dirTemp, dirOut);
-    //dirTemp = await redist(electronVersion, process.platform, 'arm64');
-    //await setup.bundle(dirApp, dirTemp);
+if(process.platform === 'win32') {
+    const {
+        buildWindowsDistribution
+    } = await import('../../packaging/windows.mjs');
+
+    for(const architecture of [
+        'ia32',
+        'x64',
+        'arm64'
+    ]) {
+        const runtime = await redist(
+            electronVersion,
+            process.platform,
+            architecture
+        );
+
+        await buildWindowsDistribution({
+            applicationSourceDirectory: dirApp,
+            resourcesDirectory: dirRes,
+            runtimeDirectory: runtime,
+            outputDirectory: dirOut,
+            packageConfig: pkgConfig,
+            architecture
+        });
+    }
 }
 
-if (process.platform === 'linux') {
-    const snap = await import('./bundle-app-snap.mjs');
-    dirTemp = await redist(electronVersion, process.platform, 'x64');
-    await snap.bundle(dirApp, dirRes, dirTemp, dirOut);
+if(process.platform === 'linux') {
+    const bundler = await import('./bundle-app-snap.mjs');
+
+    const runtime = await redist(
+        electronVersion,
+        process.platform,
+        'x64'
+    );
+
+    await bundler.bundle(
+        dirApp,
+        dirRes,
+        runtime,
+        dirOut
+    );
 }
