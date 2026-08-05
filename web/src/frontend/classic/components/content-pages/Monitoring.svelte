@@ -16,9 +16,18 @@
         type LibrarySeriesStatus,
     } from '../../../../engine/library/models/LibraryStatus';
     import type { LibrarySummary } from '../../../../engine/library/models/LibrarySummary';
+    import { Key as GlobalKey } from '../../../../engine/SettingsGlobal';
+    import type { Check, Numeric } from '../../../../engine/SettingsManager';
     import type { LibraryHistoryEntry } from '../../../../engine/library/models/LibraryHistory';
 
     const monitor = window.HakuNeko.ChapterMonitor;
+    const globalSettings = window.HakuNeko.SettingsManager.OpenScope();
+    const automaticCheckSetting = globalSettings.Get<Check>(GlobalKey.CheckNewContent);
+    const checkPeriodSetting = globalSettings.Get<Numeric>(GlobalKey.CheckNewContentPeriod);
+    const autoDownloadSetting = globalSettings.Get<Check>(GlobalKey.AutoDownloadNewContent);
+    const maxDownloadsSetting = globalSettings.Get<Numeric>(GlobalKey.AutoDownloadNewContentMaxItems);
+    const ignoreSpecialsSetting = globalSettings.Get<Check>(GlobalKey.AutoDownloadIgnoreSpecials);
+    const downloadDelaySetting = globalSettings.Get<Numeric>(GlobalKey.AutoDownloadDelay);
 
     let statuses = $state<LibrarySeriesStatus[]>([]);
     let history = $state<LibraryHistoryEntry[]>([]);
@@ -32,10 +41,18 @@
     });
     let isRunning = $state(false);
     let lastChecked = $state<Date | null>(null);
+    let checkedCount = $state(0);
+    let totalCount = $state(0);
     let searchQuery = $state('');
     type SortKey = 'status' | 'title' | 'website' | 'known' | 'new' | 'checked';
     let sortKey = $state<SortKey>('status');
     let sortAscending = $state(true);
+    let automaticCheck = $state(automaticCheckSetting.Value);
+    let checkPeriod = $state(checkPeriodSetting.Value);
+    let autoDownload = $state(autoDownloadSetting.Value);
+    let maxDownloads = $state(maxDownloadsSetting.Value);
+    let ignoreSpecials = $state(ignoreSpecialsSetting.Value);
+    let downloadDelay = $state(downloadDelaySetting.Value);
 
     function getFilteredStatuses(): LibrarySeriesStatus[] {
         const query = searchQuery.trim().toLocaleLowerCase();
@@ -188,6 +205,45 @@
         }
     }
 
+    function updateAutomaticCheck(value: boolean): void {
+        automaticCheck = value;
+        automaticCheckSetting.Value = value;
+    }
+
+    function updateCheckPeriod(value: number): void {
+        checkPeriod = Math.max(
+            checkPeriodSetting.Min,
+            Math.min(checkPeriodSetting.Max, value)
+        );
+        checkPeriodSetting.Value = checkPeriod;
+    }
+
+    function updateAutoDownload(value: boolean): void {
+        autoDownload = value;
+        autoDownloadSetting.Value = value;
+    }
+
+    function updateMaxDownloads(value: number): void {
+        maxDownloads = Math.max(
+            maxDownloadsSetting.Min,
+            Math.min(maxDownloadsSetting.Max, value)
+        );
+        maxDownloadsSetting.Value = maxDownloads;
+    }
+
+    function updateIgnoreSpecials(value: boolean): void {
+        ignoreSpecials = value;
+        ignoreSpecialsSetting.Value = value;
+    }
+
+    function updateDownloadDelay(value: number): void {
+        downloadDelay = Math.max(
+            downloadDelaySetting.Min,
+            Math.min(downloadDelaySetting.Max, value)
+        );
+        downloadDelaySetting.Value = downloadDelay;
+    }
+
     onMount(() => {
         const onStatuses = (value: Map<string, LibrarySeriesStatus>) => {
             updateStatuses(value);
@@ -204,18 +260,52 @@
         const onLastChecked = (value: Date | null) => {
             lastChecked = value;
         };
+        const onCheckedCount = (value: number) => {
+            checkedCount = value;
+        };
+        const onTotalCount = (value: number) => {
+            totalCount = value;
+        };
+        const onAutomaticCheck = (value: boolean) => {
+            automaticCheck = value;
+        };
+        const onCheckPeriod = (value: number) => {
+            checkPeriod = value;
+        };
+        const onAutoDownload = (value: boolean) => {
+            autoDownload = value;
+        };
+        const onMaxDownloads = (value: number) => {
+            maxDownloads = value;
+        };
+        const onIgnoreSpecials = (value: boolean) => {
+            ignoreSpecials = value;
+        };
+        const onDownloadDelay = (value: number) => {
+            downloadDelay = value;
+        };
 
         updateStatuses(monitor.Statuses.Value);
         history = [...monitor.History.Value];
         summary = { ...monitor.Summary.Value };
         isRunning = monitor.IsRunning.Value;
         lastChecked = monitor.LastChecked.Value;
+        checkedCount = monitor.CheckedCount.Value;
+        totalCount = monitor.TotalCount.Value;
 
         monitor.Statuses.Subscribe(onStatuses);
         monitor.History.Subscribe(onHistory);
         monitor.Summary.Subscribe(onSummary);
         monitor.IsRunning.Subscribe(onRunning);
         monitor.LastChecked.Subscribe(onLastChecked);
+        monitor.CheckedCount.Subscribe(onCheckedCount);
+        monitor.TotalCount.Subscribe(onTotalCount);
+        automaticCheckSetting.Subscribe(onAutomaticCheck);
+        checkPeriodSetting.Subscribe(onCheckPeriod);
+        autoDownloadSetting.Subscribe(onAutoDownload);
+        maxDownloadsSetting.Subscribe(onMaxDownloads);
+        ignoreSpecialsSetting.Subscribe(onIgnoreSpecials);
+        downloadDelaySetting.Subscribe(onDownloadDelay);
 
         return () => {
             monitor.Statuses.Unsubscribe(onStatuses);
@@ -223,6 +313,14 @@
             monitor.Summary.Unsubscribe(onSummary);
             monitor.IsRunning.Unsubscribe(onRunning);
             monitor.LastChecked.Unsubscribe(onLastChecked);
+            monitor.CheckedCount.Unsubscribe(onCheckedCount);
+            monitor.TotalCount.Unsubscribe(onTotalCount);
+            automaticCheckSetting.Unsubscribe(onAutomaticCheck);
+            checkPeriodSetting.Unsubscribe(onCheckPeriod);
+            autoDownloadSetting.Unsubscribe(onAutoDownload);
+            maxDownloadsSetting.Unsubscribe(onMaxDownloads);
+            ignoreSpecialsSetting.Unsubscribe(onIgnoreSpecials);
+            downloadDelaySetting.Unsubscribe(onDownloadDelay);
         };
     });
 </script>
@@ -236,13 +334,24 @@
             </p>
         </div>
 
-        <Button
-            icon={Renew}
-            disabled={isRunning}
-            onclick={() => void monitor.CheckNow()}
-        >
-            {isRunning ? 'Vérification…' : 'Vérifier maintenant'}
-        </Button>
+        <div class="monitor-actions">
+            {#if isRunning}
+                <Button
+                    kind="secondary"
+                    onclick={() => monitor.CancelCurrentCheck()}
+                >
+                    Arrêter après la série en cours
+                </Button>
+            {/if}
+
+            <Button
+                icon={Renew}
+                disabled={isRunning}
+                onclick={() => void monitor.CheckNow()}
+            >
+                {isRunning ? 'Vérification…' : 'Vérifier maintenant'}
+            </Button>
+        </div>
     </div>
 
     <div class="summary">
@@ -273,9 +382,124 @@
     </div>
 
     <Tile class="last-check">
-        <span>Dernière vérification</span>
-        <strong>{formatDate(lastChecked)}</strong>
+        <div class="last-check-value">
+            <span>Dernière vérification</span>
+            <strong>{formatDate(lastChecked)}</strong>
+        </div>
+
+        {#if isRunning}
+            <div class="monitor-progress">
+                <span>
+                    Série {Math.min(checkedCount + 1, totalCount)} sur {totalCount}
+                </span>
+                <progress
+                    max={Math.max(totalCount, 1)}
+                    value={checkedCount}
+                ></progress>
+            </div>
+        {/if}
     </Tile>
+
+    <section class="automation-section">
+        <div class="automation-heading">
+            <div>
+                <h3>Automatisation</h3>
+                <p>
+                    Configure la vérification périodique et le téléchargement automatique.
+                </p>
+            </div>
+
+            <span class:enabled={automaticCheck} class="automation-state">
+                {automaticCheck ? 'Surveillance active' : 'Surveillance inactive'}
+            </span>
+        </div>
+
+        <div class="automation-grid">
+            <Tile class="automation-card">
+                <label class="toggle-line">
+                    <input
+                        type="checkbox"
+                        checked={automaticCheck}
+                        onchange={event => updateAutomaticCheck(event.currentTarget.checked)}
+                    />
+                    <span>
+                        <strong>Vérification automatique</strong>
+                        <small>Contrôle périodiquement les séries surveillées.</small>
+                    </span>
+                </label>
+
+                <label class="field-line">
+                    <span>Intervalle en minutes</span>
+                    <input
+                        type="number"
+                        min={checkPeriodSetting.Min}
+                        max={checkPeriodSetting.Max}
+                        value={checkPeriod}
+                        disabled={!automaticCheck}
+                        onchange={event => updateCheckPeriod(event.currentTarget.valueAsNumber)}
+                    />
+                </label>
+            </Tile>
+
+            <Tile class="automation-card">
+                <label class="toggle-line">
+                    <input
+                        type="checkbox"
+                        checked={autoDownload}
+                        onchange={event => updateAutoDownload(event.currentTarget.checked)}
+                    />
+                    <span>
+                        <strong>Téléchargement automatique</strong>
+                        <small>
+                            Ajoute les nouveaux chapitres détectés à la file de téléchargement.
+                        </small>
+                    </span>
+                </label>
+
+                <label class="field-line">
+                    <span>Maximum par série</span>
+                    <input
+                        type="number"
+                        min={maxDownloadsSetting.Min}
+                        max={maxDownloadsSetting.Max}
+                        value={maxDownloads}
+                        disabled={!autoDownload}
+                        onchange={event => updateMaxDownloads(event.currentTarget.valueAsNumber)}
+                    />
+                </label>
+
+                <label class="toggle-line compact">
+                    <input
+                        type="checkbox"
+                        checked={ignoreSpecials}
+                        disabled={!autoDownload}
+                        onchange={event => updateIgnoreSpecials(event.currentTarget.checked)}
+                    />
+                    <span>
+                        <strong>Ignorer les chapitres spéciaux</strong>
+                        <small>Ignore les bonus, extras, omake et side stories.</small>
+                    </span>
+                </label>
+
+                <label class="field-line">
+                    <span>Délai entre les ajouts (ms)</span>
+                    <input
+                        type="number"
+                        min={downloadDelaySetting.Min}
+                        max={downloadDelaySetting.Max}
+                        step="100"
+                        value={downloadDelay}
+                        disabled={!autoDownload}
+                        onchange={event => updateDownloadDelay(event.currentTarget.valueAsNumber)}
+                    />
+                </label>
+            </Tile>
+        </div>
+
+        <p class="automation-note">
+            La valeur 0 pour « Maximum par série » signifie qu'aucune limite n'est appliquée.
+        </p>
+    </section>
 
     <section class="series-section">
         <div class="series-heading">
@@ -614,6 +838,150 @@
         white-space: nowrap;
     }
 
+    .monitor-actions {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    :global(.last-check) {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1.5rem;
+    }
+
+    .last-check-value,
+    .monitor-progress {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+    }
+
+    .monitor-progress {
+        width: min(24rem, 45vw);
+        text-align: right;
+    }
+
+    .monitor-progress progress {
+        width: 100%;
+        height: 0.5rem;
+        accent-color: var(--cds-focus);
+    }
+
+    .automation-section {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .automation-heading {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+    }
+
+    .automation-heading h3,
+    .automation-heading p {
+        margin: 0;
+    }
+
+    .automation-heading p {
+        margin-top: 0.25rem;
+        color: var(--cds-text-secondary, var(--cds-text-02));
+    }
+
+    .automation-state {
+        flex: none;
+        padding: 0.3rem 0.6rem;
+        border-radius: 1rem;
+        background: var(--cds-layer-hover);
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .automation-state.enabled {
+        background: var(--cds-support-success);
+        color: var(--cds-text-on-color);
+    }
+
+    .automation-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.75rem;
+    }
+
+    :global(.automation-card) {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .toggle-line,
+    .field-line {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .toggle-line {
+        align-items: flex-start;
+    }
+
+    .toggle-line.compact {
+        margin-top: 0.25rem;
+    }
+
+    .toggle-line input {
+        flex: none;
+        width: 1rem;
+        height: 1rem;
+        margin-top: 0.15rem;
+    }
+
+    .toggle-line span {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+    }
+
+    .toggle-line small,
+    .automation-note {
+        color: var(--cds-text-secondary, var(--cds-text-02));
+    }
+
+    .field-line {
+        justify-content: space-between;
+    }
+
+    .field-line input {
+        width: 7rem;
+        padding: 0.45rem 0.55rem;
+        border: 0;
+        border-bottom: 0.0625rem solid var(--cds-border-strong);
+        background: var(--cds-field, var(--cds-field-01));
+        color: inherit;
+    }
+
+    .field-line input:focus {
+        outline: 0.125rem solid var(--cds-focus);
+        outline-offset: -0.125rem;
+    }
+
+    .field-line input:disabled,
+    .toggle-line input:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .automation-note {
+        margin: 0;
+        font-size: 0.75rem;
+    }
+
     .series-heading {
         display: flex;
         align-items: center;
@@ -646,6 +1014,10 @@
     }
 
     @media (max-width: 70rem) {
+        .automation-grid {
+            grid-template-columns: 1fr;
+        }
+
         .summary {
             grid-template-columns: repeat(2, minmax(10rem, 1fr));
         }
@@ -666,13 +1038,21 @@
     @media (max-width: 45rem) {
         .heading,
         .series-heading,
-        .history-heading {
+        .history-heading,
+        .automation-heading,
+        :global(.last-check) {
             align-items: stretch;
             flex-direction: column;
         }
 
-        .series-search {
+        .series-search,
+        .monitor-progress {
             width: auto;
+        }
+
+        .monitor-actions {
+            align-items: stretch;
+            flex-direction: column-reverse;
         }
 
         .summary {

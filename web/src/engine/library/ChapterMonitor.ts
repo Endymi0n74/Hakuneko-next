@@ -62,11 +62,18 @@ export class ChapterMonitor {
     public readonly LastChecked =
         new Observable<Date | null>(null);
 
+    public readonly CheckedCount =
+        new Observable<number>(0);
+
+    public readonly TotalCount =
+        new Observable<number>(0);
+
     public readonly Summary =
         new Observable<LibrarySummary>(CreateEmptySummary());
 
     #intervalID?: number;
     #initialized = false;
+    #cancelRequested = false;
 
     constructor(
         private readonly bookmarks: BookmarkPlugin,
@@ -109,6 +116,20 @@ export class ChapterMonitor {
     }
 
     /**
+     * Request cancellation of the current library check.
+     *
+     * The current website request cannot always be aborted safely, so the
+     * monitor stops before starting the next bookmark.
+     */
+    public CancelCurrentCheck(): void {
+        if(!this.IsRunning.Value) {
+            return;
+        }
+
+        this.#cancelRequested = true;
+    }
+
+    /**
      * Run a complete check immediately.
      *
      * A second request is ignored while a check is already running.
@@ -118,7 +139,11 @@ export class ChapterMonitor {
             return;
         }
 
+        this.#cancelRequested = false;
         this.IsRunning.Value = true;
+        this.CheckedCount.Value = 0;
+        this.TotalCount.Value = this.bookmarks.Entries.Value.length;
+
         this.PushEvent({
             timestamp: new Date(),
             type: 'check-started',
@@ -129,7 +154,12 @@ export class ChapterMonitor {
 
         try {
             for(const bookmark of this.bookmarks.Entries.Value) {
+                if(this.#cancelRequested) {
+                    break;
+                }
+
                 const status = await this.CheckBookmark(bookmark);
+                this.CheckedCount.Value++;
 
                 if(status.status === LibraryStatusKind.NewContent) {
                     newContent.push(status);
@@ -139,6 +169,17 @@ export class ChapterMonitor {
             const checkedAt = new Date();
             this.LastChecked.Value = checkedAt;
             this.UpdateSummary();
+
+            if(this.#cancelRequested) {
+                this.PushEvent({
+                    timestamp: checkedAt,
+                    type: 'check-cancelled',
+                    message:
+                        `Vérification interrompue après `
+                        + `${this.CheckedCount.Value}/${this.TotalCount.Value} série(s)`
+                });
+                return;
+            }
 
             if(newContent.length > 0) {
                 await this.options.onNewContent?.(newContent);
@@ -152,6 +193,7 @@ export class ChapterMonitor {
                     : 'Bibliothèque à jour'
             });
         } finally {
+            this.#cancelRequested = false;
             this.IsRunning.Value = false;
         }
     }

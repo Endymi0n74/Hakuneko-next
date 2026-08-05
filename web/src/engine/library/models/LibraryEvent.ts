@@ -1,6 +1,7 @@
 export type LibraryEventType =
     | 'check-started'
     | 'check-finished'
+    | 'check-cancelled'
     | 'new-content'
     | 'error';
 
