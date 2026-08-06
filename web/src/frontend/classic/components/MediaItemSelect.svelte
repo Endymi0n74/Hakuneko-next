@@ -35,7 +35,7 @@
     let items: MediaContainer<MediaItem>[] = $state([]);
     let filteredItems: MediaContainer<MediaItem>[] = $state([]);
     let selectedItems: MediaContainer<MediaItem>[] = $state([]);
-    let reverseSortOrder: boolean = $state(false);
+    let reverseSortOrder: boolean = $state(true);
 
     let loadItem: Promise<MediaContainer<MediaChild>> = $state();
 
@@ -54,9 +54,9 @@
     }
 
     $effect(() => {
-        const position = filteredItems.indexOf(UI.selectedItem);
-        UI.selectedItemPrevious = filteredItems[position + 1];
-        UI.selectedItemNext = filteredItems[position - 1];
+        const position = showItems.indexOf(UI.selectedItem);
+        UI.selectedItemPrevious = showItems[position + 1];
+        UI.selectedItemNext = showItems[position - 1];
     });
 
     const onItemView = (item: MediaContainer<MediaItem>) => (event) => {
