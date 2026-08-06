@@ -9,5 +9,6 @@
     "build": "vitepress build",
     "test": "",
     "serve": "vitepress dev"
-  }
+  },
+  "version": "1.5.0"
 }

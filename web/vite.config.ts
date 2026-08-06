@@ -132,6 +132,11 @@ export default defineConfig({
     build: {
         sourcemap: false,
         outDir: 'build',
+
+        // Keep website icons as standalone files instead of embedding hundreds
+        // of small WebP files as base64 strings in JavaScript chunks.
+        assetsInlineLimit: 0,
+
         chunkSizeWarningLimit: 2 * 1024,
 
         rolldownOptions: {
@@ -159,13 +164,6 @@ export default defineConfig({
                 manualChunks(id) {
                     if(id.includes('node_modules')) {
                         return 'Vendor';
-                    }
-
-                    if(
-                        /\/web\/src\/engine\/websites\//.test(id)
-                        && /\/[a-zA-Z0-9_-]+\.webp$/.test(id)
-                    ) {
-                        return 'WebsiteIcons';
                     }
 
                     return undefined;
