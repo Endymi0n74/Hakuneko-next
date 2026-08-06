@@ -103,27 +103,142 @@ export default class extends DecoratableMangaScraper {
         provider: MangaPlugin,
         url: string
     ): Promise<Manga> {
-        const {
-            data: {
-                hid,
-                title
-            }
-        } = await FetchJSON<{
-            data: APIManga
-        }>(
-            new Request(
-                new URL(
-                    `./titles/${url.match(/\/title\/([^-]+)/).at(1)}`,
-                    this.apiURL
+        const uri = new URL(url);
+        const slug = uri.pathname
+            .match(/\/title\/([^/?#]+)/)
+            ?.at(1);
+
+        if(!slug) {
+            throw new Error(
+                `Invalid MangaFire title URL: ${url}`
+            );
+        }
+
+        const identifier = slug.includes('.')
+            ? slug.split('.').at(-1)
+            : slug.split('-').at(0);
+
+        if(!identifier) {
+            throw new Error(
+                `Unable to extract MangaFire identifier: ${url}`
+            );
+        }
+
+        try {
+            const {
+                data: {
+                    title
+                }
+            } = await FetchJSON<{
+                data: APIManga
+            }>(
+                new Request(
+                    new URL(
+                        `./titles/${identifier}`,
+                        this.apiURL
+                    )
                 )
-            )
+            );
+
+            return new Manga(
+                this,
+                provider,
+                identifier,
+                title
+            );
+        } catch(error) {
+            console.warn(
+                '[HakuNeko] MangaFire title API unavailable; '
+                + 'falling back to page metadata.',
+                error
+            );
+        }
+
+        const metadata = await FetchWindowScript<{
+            identifier: string;
+            title: string;
+        }>(
+            new Request(uri),
+            `
+            new Promise(resolve => {
+                const normalize = value =>
+                    String(value ?? '')
+                        .replace(/\s+/g, ' ')
+                        .trim();
+
+                const cleanTitle = value =>
+                    normalize(value)
+                        .replace(
+                            /\s*[-|]\s*MangaFire\s*$/i,
+                            ''
+                        )
+                        .trim();
+
+                const getTitle = () => {
+                    const candidates = [
+                        document.querySelector('h1')?.textContent,
+                        document.querySelector(
+                            'meta[property="og:title"]'
+                        )?.content,
+                        document.querySelector(
+                            'meta[name="twitter:title"]'
+                        )?.content,
+                        document.title
+                    ];
+
+                    return candidates
+                        .map(cleanTitle)
+                        .find(value =>
+                            value
+                            && !/security check|verify you/i.test(value)
+                        );
+                };
+
+                const started = Date.now();
+
+                const poll = () => {
+                    const title = getTitle();
+                    const challengeActive =
+                        location.pathname.includes('/@waf/challenge')
+                        || /security check|verify you/i.test(
+                            document.body?.innerText ?? ''
+                        );
+
+                    if(title && !challengeActive) {
+                        resolve({
+                            identifier: '${identifier}',
+                            title
+                        });
+                        return;
+                    }
+
+                    if(Date.now() - started > 45_000) {
+                        resolve({
+                            identifier: '${identifier}',
+                            title:
+                                title
+                                || '${slug}'
+                                    .replace(/[._-]+/g, ' ')
+                                    .trim()
+                        });
+                        return;
+                    }
+
+                    setTimeout(poll, 250);
+                };
+
+                poll();
+            })
+            `,
+            500,
+            60_000
         );
 
         return new Manga(
             this,
             provider,
-            hid,
-            title
+            identifier,
+            metadata.title
         );
     }
 
@@ -151,14 +266,30 @@ export default class extends DecoratableMangaScraper {
                         location.origin
                     );
 
+                    const pathname =
+                        uri.pathname.toLowerCase();
+
+                    const search =
+                        uri.search.toLowerCase();
+
+                    const identifier =
+                        '${manga.Identifier}'
+                            .split('.')
+                            .at(-1)
+                            .toLowerCase();
+
+                    const isChapterRequest =
+                        pathname.includes('chapter')
+                        || pathname.includes('volume');
+
+                    const belongsToManga =
+                        pathname.includes(identifier)
+                        || search.includes(identifier);
+
                     if(
-                        !uri.pathname.includes(
-                            '/api/titles/${manga.Identifier}/'
-                        )
-                        || (
-                            !uri.pathname.endsWith('/chapters')
-                            && !uri.pathname.endsWith('/volumes')
-                        )
+                        !pathname.includes('/api/')
+                        || !isChapterRequest
+                        || !belongsToManga
                     ) {
                         return;
                     }
@@ -586,6 +717,120 @@ export default class extends DecoratableMangaScraper {
                             ]
                                 .filter(Boolean)
                                 .join(' - '),
+                            language
+                        });
+                    }
+                }
+
+                /*
+                 * MangaFire sometimes renders chapter links directly in
+                 * the page without exposing the former titles API.
+                 * Use those links as a fallback when no API rows were
+                 * captured.
+                 */
+                if(result.length === 0) {
+                    const languageAliases = new Map([
+                        ['en', 'en'],
+                        ['english', 'en'],
+                        ['fr', 'fr'],
+                        ['french', 'fr'],
+                        ['ja', 'ja'],
+                        ['jp', 'ja'],
+                        ['japanese', 'ja'],
+                        ['pt', 'pt-br'],
+                        ['pt-br', 'pt-br'],
+                        ['portuguese', 'pt-br'],
+                        ['es', 'es'],
+                        ['spanish', 'es']
+                    ]);
+
+                    const detectLanguage = element => {
+                        const candidates = [
+                            element.getAttribute('lang'),
+                            element.dataset?.language,
+                            element.closest('[lang]')
+                                ?.getAttribute('lang'),
+                            element.closest('[data-language]')
+                                ?.dataset?.language,
+                            element.closest('section, article, div')
+                                ?.textContent
+                        ]
+                            .map(normalize)
+                            .filter(Boolean);
+
+                        for(const candidate of candidates) {
+                            const normalized =
+                                candidate.toLowerCase();
+
+                            for(const [
+                                alias,
+                                language
+                            ] of languageAliases) {
+                                if(normalized.includes(alias)) {
+                                    return language;
+                                }
+                            }
+                        }
+
+                        return 'en';
+                    };
+
+                    for(const anchor of document.querySelectorAll(
+                        'a[href*="/chapter/"]'
+                    )) {
+                        const href = anchor.href
+                            || anchor.getAttribute('href');
+
+                        if(!href) {
+                            continue;
+                        }
+
+                        let chapterID;
+
+                        try {
+                            chapterID = new URL(
+                                href,
+                                location.origin
+                            ).pathname
+                                .match(/\\/chapter\\/([^/?#]+)/)
+                                ?.at(1);
+                        } catch {
+                            continue;
+                        }
+
+                        if(!chapterID) {
+                            continue;
+                        }
+
+                        const language =
+                            detectLanguage(anchor);
+
+                        const key =
+                            language + '|' + chapterID;
+
+                        if(seen.has(key)) {
+                            continue;
+                        }
+
+                        seen.add(key);
+
+                        const rawText = normalize(
+                            anchor.textContent
+                            || anchor.getAttribute('title')
+                            || chapterID
+                        );
+
+                        const numberMatch = rawText.match(
+                            /(?:chapter|ch\\.?|vol(?:ume)?\\.?)\\s*([0-9]+(?:\\.[0-9]+)?)/i
+                        );
+
+                        const text = numberMatch
+                            ? rawText
+                            : 'Ch. ' + rawText;
+
+                        result.push({
+                            id: chapterID,
+                            text,
                             language
                         });
                     }
