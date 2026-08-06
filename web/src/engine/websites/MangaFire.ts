@@ -1126,7 +1126,15 @@ export default class extends DecoratableMangaScraper {
             30_000
         );
 
-        return urls.map(
+
+        console.log('[HakuNeko Debug] MangaFire URLs:', {
+            count: urls.length,
+            first: urls[0],
+            last: urls[urls.length - 1],
+            urls: urls
+        });
+
+        return urls.reverse().map(
             url =>
                 new Page(
                     this,
