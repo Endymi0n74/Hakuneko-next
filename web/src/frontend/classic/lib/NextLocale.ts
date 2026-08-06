@@ -61,7 +61,11 @@ const strings: Record<'en' | 'fr' | 'pt', NextLocaleStrings> = {
         showIp: 'Show IP and location',
         about: 'About',
         sourceCode: 'Source code',
+<<<<<<< HEAD
         version: 'HakuNeko-Next 1.4.0',
+=======
+        version: 'HakuNeko-Next 1.5.0',
+>>>>>>> 9b2d30f7 (build: update project files)
         maintainer: 'Maintainer: Endymion',
         contributors: 'Contributors',
         artwork: 'Artwork',
@@ -75,7 +79,11 @@ const strings: Record<'en' | 'fr' | 'pt', NextLocaleStrings> = {
         welcomeTitle: 'HakuNeko-Next (=^･ω･^=)',
         welcomeBody: 'Download manga, anime and novels for offline reading and viewing.',
         basedOn: 'Community fork based on HakuNeko.',
+<<<<<<< HEAD
         releaseHighlights: 'Version 1.4.0 highlights',
+=======
+        releaseHighlights: 'Version 1.5.0 highlights',
+>>>>>>> 9b2d30f7 (build: update project files)
         featureMonitoring: 'Automatic library monitoring',
         featureLanguages: 'Multilingual chapter filtering',
         featureMangaFire: 'MangaFire interactive security support',
@@ -100,7 +108,11 @@ const strings: Record<'en' | 'fr' | 'pt', NextLocaleStrings> = {
         showIp: 'Afficher l’IP et la localisation',
         about: 'À propos',
         sourceCode: 'Code source',
+<<<<<<< HEAD
         version: 'HakuNeko-Next 1.4.0',
+=======
+        version: 'HakuNeko-Next 1.5.0',
+>>>>>>> 9b2d30f7 (build: update project files)
         maintainer: 'Maintenance : Endymion',
         contributors: 'Contributeurs',
         artwork: 'Illustrations',
@@ -114,7 +126,11 @@ const strings: Record<'en' | 'fr' | 'pt', NextLocaleStrings> = {
         welcomeTitle: 'HakuNeko-Next (=^･ω･^=)',
         welcomeBody: 'Téléchargez mangas, animés et romans pour les lire ou les regarder hors ligne.',
         basedOn: 'Fork communautaire basé sur HakuNeko.',
+<<<<<<< HEAD
         releaseHighlights: 'Nouveautés de la version 1.4.0',
+=======
+        releaseHighlights: 'Nouveautés de la version 1.5.0',
+>>>>>>> 9b2d30f7 (build: update project files)
         featureMonitoring: 'Surveillance automatique de la bibliothèque',
         featureLanguages: 'Filtrage multilingue des chapitres',
         featureMangaFire: 'Prise en charge de la sécurité interactive MangaFire',
@@ -139,7 +155,11 @@ const strings: Record<'en' | 'fr' | 'pt', NextLocaleStrings> = {
         showIp: 'Mostrar IP e localização',
         about: 'Sobre',
         sourceCode: 'Código-fonte',
+<<<<<<< HEAD
         version: 'HakuNeko-Next 1.4.0',
+=======
+        version: 'HakuNeko-Next 1.5.0',
+>>>>>>> 9b2d30f7 (build: update project files)
         maintainer: 'Manutenção: Endymion',
         contributors: 'Colaboradores',
         artwork: 'Ilustrações',
@@ -153,7 +173,11 @@ const strings: Record<'en' | 'fr' | 'pt', NextLocaleStrings> = {
         welcomeTitle: 'HakuNeko-Next (=^･ω･^=)',
         welcomeBody: 'Baixe mangás, animes e novels para ler ou assistir offline.',
         basedOn: 'Fork comunitário baseado no HakuNeko.',
+<<<<<<< HEAD
         releaseHighlights: 'Destaques da versão 1.4.0',
+=======
+        releaseHighlights: 'Destaques da versão 1.5.0',
+>>>>>>> 9b2d30f7 (build: update project files)
         featureMonitoring: 'Monitoramento automático da biblioteca',
         featureLanguages: 'Filtro multilíngue de capítulos',
         featureMangaFire: 'Suporte à verificação interativa do MangaFire',

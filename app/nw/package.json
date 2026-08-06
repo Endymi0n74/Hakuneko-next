@@ -1,6 +1,10 @@
 {
     "name": "hakuneko-next-nw",
+<<<<<<< HEAD
     "version": "1.4.1",
+=======
+    "version": "1.5.0",
+>>>>>>> 9b2d30f7 (build: update project files)
     "title": "HakuNeko-Next",
     "productName": "HakuNeko-Next",
     "description": "Téléchargeur et gestionnaire de bibliothèque pour mangas, animés et romans",

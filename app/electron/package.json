@@ -1,6 +1,10 @@
 {
     "name": "hakuneko-next-electron",
+<<<<<<< HEAD
     "version": "1.4.1",
+=======
+    "version": "1.5.0",
+>>>>>>> 9b2d30f7 (build: update project files)
     "title": "HakuNeko-Next",
     "productName": "HakuNeko-Next",
     "executableName": "HakuNeko-Next",
