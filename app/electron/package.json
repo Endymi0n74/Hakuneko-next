@@ -1,6 +1,6 @@
 {
     "name": "hakuneko-next-electron",
-    "version": "1.4.0",
+    "version": "1.4.1",
     "title": "HakuNeko-Next",
     "productName": "HakuNeko-Next",
     "executableName": "HakuNeko-Next",
@@ -17,8 +17,8 @@
         "websocket-rpc": "github:manga-download/websocket-rpc#v1.2.7"
     },
     "devDependencies": {
-        "extract-zip": "2.0.1",
         "electron": "43.0.0",
+        "extract-zip": "2.0.1",
         "plist": "5.0.0"
     },
     "scripts": {

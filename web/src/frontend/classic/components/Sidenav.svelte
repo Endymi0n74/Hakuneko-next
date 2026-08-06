@@ -5,7 +5,6 @@
         SideNavMenu,
         SideNavLink,
     } from 'carbon-components-svelte';
-    import App from 'carbon-icons-svelte/lib/App.svelte';
     import Bookmark from 'carbon-icons-svelte/lib/Bookmark.svelte';
     import CopyLink from 'carbon-icons-svelte/lib/CopyLink.svelte';
     import Debug from 'carbon-icons-svelte/lib/Debug.svelte';
@@ -32,7 +31,6 @@
 
     import { Store as UI } from '../stores/Stores.svelte';
     import { GlobalSettings, Settings as UISettings } from '../stores/Settings.svelte';
-    import { GetNextLocale } from '../lib/NextLocale';
 
     interface Props {
         isOpen: boolean;
@@ -45,7 +43,6 @@
     let isSettingsModalOpen =  $state(false);
     let isPluginModalOpen = $state(false);
     let isBookmarksImportModalOpen =  $state(false);
-    let nextLocale = $derived(GetNextLocale(GlobalSettings.LocaleID));
 </script>
 
 <PluginSelect bind:isPluginModalOpen on:close={() => (isPluginModalOpen = false)} />
@@ -55,16 +52,16 @@
 {#if isBookmarksImportModalOpen}
     <BookmarksImport bind:isModalOpen={isBookmarksImportModalOpen} />
 {/if}
-<SideNav bind:isOpen rail={UISettings.SidenavTrail.Value}>
+<SideNav bind:isOpen rail={false}>
         <SideNavItems>
             {#if !UISettings.SidenavIconsOnTop.Value}
                 <SideNavLink
-                    text={nextLocale.home}
+                    text={GlobalSettings.Locale.Frontend_Classic_Sidenav_Home()}
                     icon={Home}
                     onclick={onHome}
                 />
                 <SideNavLink
-                    text={nextLocale.bookmarks}
+                    text={'Bookmarks'}
                     icon={Bookmark}
                     onclick={() => {
                         UI.selectedPlugin = window.HakuNeko.BookmarkPlugin;
@@ -73,7 +70,7 @@
                     }}
                 />
                 <SideNavLink
-                    text={nextLocale.monitoring}
+                    text={'Surveillance'}
                     icon={EventsAlt}
                     onclick={() => {
                         UI.contentscreen = '/monitoring';
@@ -83,24 +80,24 @@
                 />
             {/if}
             <SideNavLink
-                text={nextLocale.pasteMediaUrl}
+                text={'Paste Media URL'}
                 icon={CopyLink}
                 onclick={() =>
                     document.dispatchEvent(new Event('media-paste-url'))}
             />
             <SideNavLink
-                text={nextLocale.plugins}
+                text={GlobalSettings.Locale.Frontend_Plugins()}
                 icon={PlugFilled}
                 onclick={() => (isPluginModalOpen = true)}
             />
             <SideNavLink
-                text={nextLocale.importExport}
+                text="import/export"
                 icon={ImportExport}
                 onclick={() => (isBookmarksImportModalOpen = true)}
             />
-            <SideNavMenu text={nextLocale.settings} icon={Settings}>
+            <SideNavMenu text={GlobalSettings.Locale.Frontend_Settings()} icon={Settings}>
                 <SideNavLink
-                    text={nextLocale.general}
+                    text={GlobalSettings.Locale.Frontend_Classic_Sidenav_Settings_General()}
                     icon={SettingsAdjust}
                     onclick={() => {
                         settingsSelectedTabs = 0;
@@ -108,7 +105,7 @@
                     }}
                 />
                 <SideNavLink
-                    text={nextLocale.interface}
+                    text={GlobalSettings.Locale.Frontend_Classic_Sidenav_Settings_Interface()}
                     icon={ScreenMap}
                     onclick={() => {
                         settingsSelectedTabs = 1;
@@ -116,7 +113,7 @@
                     }}
                 />
                 <SideNavLink
-                    text={nextLocale.viewer}
+                    text="Viewer"
                     icon={SettingsView}
                     onclick={() => {
                         settingsSelectedTabs = 1;
@@ -124,7 +121,7 @@
                     }}
                 />
                 <SideNavLink
-                    text={nextLocale.trackers}
+                    text={GlobalSettings.Locale.Frontend_Classic_Sidenav_Settings_Trackers()}
                     icon={TaskSettings}
                     onclick={() => {
                         settingsSelectedTabs = 3;
@@ -132,9 +129,9 @@
                     }}
                 />
             </SideNavMenu>
-            <SideNavMenu text={nextLocale.help} icon={Document}>
+            <SideNavMenu text={GlobalSettings.Locale.Frontend_Help()} icon={Document}>
                 <SideNavLink
-                    text={nextLocale.documentation}
+                    text="Documentation"
                     icon={Doc}
                     class="clik-item"
                     onclick={() =>
@@ -150,7 +147,7 @@
                         window.open('https://discordapp.com/invite/A5d3NDf')}
                 />
                 <SideNavLink
-                    text={nextLocale.openTicket}
+                    text="Open a ticket"
                     icon={Debug}
                     class="clik-item"
                     onclick={() =>
@@ -159,56 +156,71 @@
                         )}
                 />
                 <SideNavLink
-                    text={nextLocale.website}
+                    text="Home page"
                     icon={Home}
                     class="clik-item"
                     onclick={() => window.open('https://hakuneko.download')}
                 />
                 <SideNavLink
-                    text={nextLocale.showIp}
+                    text="Show IP and localisation"
                     icon={Location}
                     class="clik-item"
                     onclick={() => window.open('https://ipinfo.io/json')}
                 />
             </SideNavMenu>
-            <SideNavMenu text={nextLocale.about} icon={Information}>
+            <SideNavMenu
+                text={GlobalSettings.Locale.Frontend_About()}
+                icon={Information}
+            >
                 <SideNavLink
-                    text={nextLocale.sourceCode}
+                    text="Code source"
+                    title="Code source de HakuNeko-Next"
                     icon={LogoGithub}
-                    class="clik-item"
+                    class="about-link"
                     onclick={() =>
                         window.open(
                             'https://github.com/Endymi0n74/Hakuneko-next',
                         )}
                 />
                 <SideNavLink
-                    text={nextLocale.version}
-                    icon={App}
-                    class="clik-item"
-                    onclick={() => window.open('https://github.com/Endymi0n74/Hakuneko-next/releases/tag/v1.4.0')}
-                />
-                <SideNavLink
-                    text={nextLocale.maintainer}
-                    icon={Events}
-                    class="clik-item"
+                    text="Versions"
+                    title="Journal des versions de HakuNeko-Next"
+                    icon={Document}
+                    class="about-link"
                     onclick={() =>
-                        window.open('https://github.com/Endymi0n74')}
+                        window.open(
+                            'https://github.com/Endymi0n74/Hakuneko-next/releases',
+                        )}
                 />
                 <SideNavLink
-                    text={nextLocale.contributors}
+                    text="Contributeurs"
+                    title="Contributeurs du projet HakuNeko-Next"
                     icon={EventsAlt}
-                    class="clik-item"
+                    class="about-link"
                     onclick={() =>
                         window.open(
                             'https://github.com/Endymi0n74/Hakuneko-next/graphs/contributors',
                         )}
                 />
                 <SideNavLink
-                    text={nextLocale.artwork}
+                    text="Illustrations"
+                    title="Crédits des illustrations"
                     icon={Image}
-                    class="clik-item"
+                    class="about-link"
                     onclick={() =>
-                        window.open('https://www.deviantart.com/hakuneko3kune')}
+                        window.open(
+                            'https://www.deviantart.com/hakuneko3kune',
+                        )}
+                />
+                <SideNavLink
+                    text="Licence"
+                    title="Licence du logiciel HakuNeko-Next"
+                    icon={Doc}
+                    class="about-link"
+                    onclick={() =>
+                        window.open(
+                            'https://github.com/Endymi0n74/Hakuneko-next/blob/main/LICENSE',
+                        )}
                 />
             </SideNavMenu>
         </SideNavItems>
@@ -218,6 +230,15 @@
 
 
     /* Theme Hack: https://github.com/carbon-design-system/carbon-components-svelte/issues/762#issuecomment-885484991 */
+
+    :global(.bx--side-nav:not(.bx--side-nav--rail)
+        a.about-link
+        .bx--side-nav__link-text) {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
 
     :global(.bx--side-nav) {
         background-color: var(--cds-ui-background);

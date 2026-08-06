@@ -270,51 +270,6 @@ async function FindPackagedWebApplication(): Promise<string> {
     );
 }
 
-async function LoadApplication(
-    win: ApplicationWindow,
-    manifest: Manifest,
-    argv: CLIOptions
-): Promise<URL> {
-    /*
-     * An explicit --origin always has priority.
-     *
-     * launch:dev uses:
-     * --origin=https://localhost:3000
-     *
-     * launch:prod can use:
-     * --origin=https://localhost:5000
-     */
-    if(argv.origin) {
-        const uri = new URL(argv.origin);
-        console.log(`Loading application from explicit origin: ${uri.href}`);
-        await win.loadURL(uri.href);
-        return uri;
-    }
-
-    /*
-     * During local Electron development, retain the URL declared in the
-     * workspace package.json.
-     */
-    if(!app.isPackaged && manifest.url) {
-        const uri = new URL(manifest.url);
-        console.log(`Loading development application: ${uri.href}`);
-        await win.loadURL(uri.href);
-        return uri;
-    }
-
-    /*
-     * In a packaged build, never fall back to localhost.
-     * Load the web application bundled with Electron.
-     */
-    const indexPath = await FindPackagedWebApplication();
-    const uri = pathToFileURL(indexPath);
-
-    console.log(`Loading packaged application: ${uri.href}`);
-    await win.loadFile(indexPath);
-
-    return uri;
-}
-
 async function OpenWindow(): Promise<void> {
     try {
         InitializeMenu();
@@ -385,7 +340,7 @@ async function OpenWindow(): Promise<void> {
             await win.loadFile(indexPath);
         }
     } catch(error) {
-        console.error('Failed to start HakuNeko:', error);
+        console.error('Failed to start HakuNeko-Next:', error);
         app.quit();
     }
 }

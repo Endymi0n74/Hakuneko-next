@@ -49,7 +49,7 @@
         margin-bottom: 1em;
     }
 
-    .hero {
+    :global(.hero) {
         align-items: center;
         display: flex;
         gap: 1em;
@@ -61,11 +61,11 @@
         width: 4.5em;
     }
 
-    .hero h2 {
+    :global(.hero h2) {
         margin-bottom: 0.35em;
     }
 
-    .hero p {
+    :global(.hero p) {
         line-height: 1.45;
     }
 
@@ -74,11 +74,11 @@
         margin-top: 0.35em;
     }
 
-    .highlights h3 {
+    :global(.highlights h3) {
         margin-bottom: 0.65em;
     }
 
-    .highlights ul {
+    :global(.highlights ul) {
         display: grid;
         gap: 0.45em;
         list-style: none;

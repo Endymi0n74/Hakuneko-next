@@ -20,7 +20,6 @@
     import { Tags, type Tag } from '../../../engine/Tags';
     const availableLanguageTags = Tags.Language.toArray();
     import { GlobalSettings } from '../stores/Settings.svelte';
-    import { GetNextLocale } from '../lib/NextLocale';
 
     import type {
         StoreableMediaContainer,
@@ -32,8 +31,6 @@
     import { resizeBar } from '../lib/actions';
     import { Key as GlobalKey } from '../../../engine/SettingsGlobal';
     import type { Directory } from '../../../engine/SettingsManager';
-
-    let nextLocale = $derived(GetNextLocale(GlobalSettings.LocaleID));
 
     let items: MediaContainer<MediaItem>[] = $state([]);
     let filteredItems: MediaContainer<MediaItem>[] = $state([]);
@@ -69,19 +66,6 @@
 
     let itemNameFilter = $state('');
     
-    $effect(() => {
-        filteredItems = items?.filter((item) => {
-            let conditions: boolean[] = [];
-            if (itemNameFilter)
-                conditions.push(
-                    item.Title.toLowerCase().indexOf(
-                        itemNameFilter.toLowerCase(),
-                    ) !== -1,
-                );
-            if (langFilter) conditions.push(item.Tags.Value.includes(langFilter));
-            return conditions.every((condition) => condition);
-        });
-    });
     let showItems = $derived(reverseSortOrder ? filteredItems.toReversed() : filteredItems);
 
     let itemsdiv: HTMLElement = $state();
@@ -236,6 +220,16 @@
         langFilterID = '*';
     }
 
+    let languagePreferencesOpen: boolean = $state(false);
+
+    function toggleLanguagePreferences(): void {
+        languagePreferencesOpen = !languagePreferencesOpen;
+    }
+
+    function closeLanguagePreferences(): void {
+        languagePreferencesOpen = false;
+    }
+
     let OrderedMediaLanguages: Tag[] = $derived(
         [...MediaLanguages].sort((left, right) => {
             const priority =
@@ -257,7 +251,7 @@
     );
 
     let allLanguagesText = $derived(
-        `🌍 ${nextLocale.allLanguages} (${VisibleMediaLanguages.length}/${MediaLanguages.length})`,
+        `Language (${VisibleMediaLanguages.length}/${MediaLanguages.length})`,
     );
 
     let langComboboxItems = $derived(
@@ -282,9 +276,45 @@
             ],
     );
 
+    let activeLanguageTags: Tag[] = $derived(
+        langFilter ? [langFilter] : VisibleMediaLanguages,
+    );
+
+    $effect(() => {
+        const selectedLanguages = activeLanguageTags;
+
+        filteredItems = items?.filter((item) => {
+            const conditions: boolean[] = [];
+
+            if(itemNameFilter) {
+                conditions.push(
+                    item.Title.toLowerCase().includes(
+                        itemNameFilter.toLowerCase(),
+                    ),
+                );
+            }
+
+            if(MediaLanguages.length > 0) {
+                conditions.push(
+                    selectedLanguages.some(language =>
+                        item.Tags.Value.includes(language),
+                    ),
+                );
+            }
+
+            return conditions.every(condition => condition);
+        });
+    });
+
     //Media Changed and the langFilter is no longer valid.
-    $effect(()=>{
-        if(items.length>0 && !MediaLanguages.includes(langFilter)) langFilterID = '*';
+    $effect(() => {
+        if(
+            items.length > 0
+            && langFilter
+            && !VisibleMediaLanguages.includes(langFilter)
+        ) {
+            langFilterID = '*';
+        }
     });
 
     /*
@@ -484,7 +514,7 @@
 
 <div id="Item" transition:fade>
     <div id="ItemTitle">
-        <h5>{nextLocale.itemList}</h5>
+        <h5>Item List</h5>
     </div>
     <div id="LanguageFilter">
         <Button
@@ -492,26 +522,29 @@
             size="small"
             tooltipPosition="bottom"
             tooltipAlignment="center"
-            iconDescription="Languages"
+            iconDescription="Choose displayed languages"
+            onclick={toggleLanguagePreferences}
         />
 
         <Dropdown
             disabled={VisibleMediaLanguages.length === 0}
-            placeholder={nextLocale.allLanguages}
+            placeholder="Select a language"
             bind:selectedId={langFilterID}
             size="sm"
             items={langComboboxItems}
         />
 
-        <details id="LanguagePreferences">
-            <summary title="Choose displayed languages">
-                🌍
-            </summary>
-
-            <div class="language-preferences-menu">
+        {#if languagePreferencesOpen}
+            <div
+                id="LanguagePreferences"
+                class="language-preferences-menu"
+                role="group"
+                aria-label="Displayed languages"
+                onmouseleave={closeLanguagePreferences}
+            >
                 <div class="language-preferences-header">
                     <strong>
-                        {nextLocale.displayedLanguages}
+                        Displayed languages
                         ({VisibleMediaLanguages.length}/{MediaLanguages.length})
                     </strong>
 
@@ -520,14 +553,14 @@
                             type="button"
                             onclick={showAllLanguages}
                         >
-                            {nextLocale.selectAll}
+                            All
                         </button>
 
                         <button
                             type="button"
                             onclick={hideAllLanguages}
                         >
-                            {nextLocale.selectNone}
+                            None
                         </button>
                     </div>
                 </div>
@@ -547,7 +580,7 @@
                     </label>
                 {/each}
             </div>
-        </details>
+        {/if}
     </div>
     <div id="ItemFilter">
         <Search id="ItemFilterSearch" size="sm" bind:value={itemNameFilter} />
@@ -562,7 +595,7 @@
             {#each showItems as item (item)}
                 <MediaComponent
                     {item}
-                    multilang={!langFilter && MediaLanguages.length > 1}
+                    multilang={!langFilter && VisibleMediaLanguages.length > 1}
                     selected={selectedItems.includes(item)}
                     hover={item === contextItem}
                     onView={(event) => onItemView(item)(event.detail)}
@@ -582,7 +615,7 @@
         {/await}
     </div>
     <div id="ItemBottom">
-        {nextLocale.items}: {filteredItems.length}/{items.length}
+        Items: {filteredItems.length}/{items.length}
         <Button
             size="small"
             kind="ghost"
@@ -620,27 +653,8 @@
     #LanguageFilter {
         grid-area: LanguageFilter;
         display: grid;
-        grid-template-columns: auto 1fr auto;
+        grid-template-columns: auto 1fr;
         position: relative;
-    }
-
-    #LanguagePreferences {
-        position: relative;
-    }
-
-    #LanguagePreferences > summary {
-        align-items: center;
-        cursor: pointer;
-        display: flex;
-        height: 100%;
-        justify-content: center;
-        list-style: none;
-        min-width: 2.5rem;
-        user-select: none;
-    }
-
-    #LanguagePreferences > summary::-webkit-details-marker {
-        display: none;
     }
 
     .language-preferences-menu {
