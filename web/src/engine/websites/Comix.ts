@@ -1,22 +1,12 @@
 import { Tags } from '../Tags';
 import icon from './Comix.webp';
-import { Fetch, FetchJSON } from '../platform/FetchProvider';
+import { Fetch, FetchWindowScript } from '../platform/FetchProvider';
 import type { Priority } from '../taskpool/DeferredTask';
-import { DecoratableMangaScraper, type MangaPlugin, Manga, Chapter, Page } from '../providers/MangaPlugin';
+import { DecoratableMangaScraper, type MangaPlugin, type Manga, Chapter, Page } from '../providers/MangaPlugin';
 import * as Common from './decorators/Common';
 import { DRMProvider } from './Comix.DRM';
 import DeScramble from '../transformers/ImageDescrambler';
 import { RateLimit } from '../taskpool/RateLimit';
-
-type APIMangas = {
-    result: {
-        items: {
-            hash_id: string;
-            title: string;
-            slug: string;
-        }[];
-    };
-};
 
 const GetOdd = (value: number) => value | 1;
 
@@ -26,13 +16,13 @@ class PRNG {
 
     readonly #seed: number;
     readonly #inits = {
-        '': 0, // Define default/fallback
+        '': 0,
         '03632': 58414,
         '02900': 117532,
     };
 
     readonly #algorithms = {
-        '': this.#NextLCG, // Define default/fallback
+        '': this.#NextLCG,
         '3': this.#NextXorShift32,
     };
 
@@ -44,17 +34,11 @@ class PRNG {
 
     readonly #Next: () => number;
 
-    /**
-     * Get the next pseudo random number with `Linear Congruential Generator`.
-     */
     #NextLCG() {
         this.#state = this.#state * 1664525 + 1013904223;
         return this.#state >>> 0;
     }
 
-    /**
-     * Get the next pseudo random number with `XorShift32`.
-     */
     #NextXorShift32() {
         this.#state ^= this.#state << 13;
         this.#state ^= this.#state >>> 17;
@@ -62,11 +46,6 @@ class PRNG {
         return this.#state >>> 0;
     }
 
-    /**
-     * Create a sequence of numbers shuffled by `Fisher-Yates` algorithm.
-     * In addition the sequence is inversed (swapping values with indices).
-     * Uses one of various pre-defined algorithms as the underlying random number generator.
-     */
     public Sequence(count: number) {
         this.#state = this.#seed;
         const indices = [...new Array(Math.max(1, count)).keys()];
@@ -99,14 +78,51 @@ export default class extends DecoratableMangaScraper {
     }
 
     public override async FetchMangas(provider: MangaPlugin): Promise<Manga[]> {
-        type This = typeof this;
-        return Array.fromAsync(async function* (this: This) {
-            for (let page = 1, run = true; run; page++) {
-                const { result: { items } } = await FetchJSON<APIMangas>(new Request(new URL(`./manga?limit=100&page=${page}`, this.apiURL)));
-                const mangas = items.map(({ hash_id: hash, title, slug }) => new Manga(this, provider, `/title/${hash}-${slug}`, title));
-                mangas.length > 0 ? yield* mangas : run = false;
-            }
-        }.call(this));
+        const mangas = await FetchWindowScript<{
+            id: string;
+            title: string;
+        }[]>(
+            new Request(new URL('/', this.URI)),
+            `
+            (() => {
+                const results = [];
+                const seen = new Set();
+                const links = document.querySelectorAll('a[href*="/title/"]');
+                for (const a of links) {
+                    const href = a.getAttribute('href') || '';
+                    const url = new URL(href, window.location.href);
+                    const id = url.pathname;
+                    if (!id || seen.has(id)) continue;
+                    seen.add(id);
+
+                    let title = '';
+                    title = (a.getAttribute('title') || '').trim();
+                    if (!title) {
+                        const el = a.querySelector('.manga-title, .title, [class*="title"], h3, h2');
+                        if (el) title = el.textContent.trim();
+                    }
+                    if (!title) {
+                        let raw = a.textContent.trim();
+                        raw = raw.replace(/^(?:Ch\\.\\d+\\s*)?(?:\\d+[dhms]\\s+ago)?\\s*/i, '').trim();
+                        title = raw;
+                    }
+                    if (!title) {
+                        title = id.split('/').pop().split('-').slice(1).join(' ').replace(/\\b\\w/g, c => c.toUpperCase());
+                    }
+
+                    if (title.length < 2) continue;
+                    results.push({ id, title });
+                }
+                return results;
+            })()
+            `,
+            3_000,
+            30_000
+        );
+
+        return mangas.map(
+            ({ id, title }) => new Manga(this, provider, id, title)
+        );
     }
 
     public override async FetchChapters(manga: Manga): Promise<Chapter[]> {
@@ -119,13 +135,14 @@ export default class extends DecoratableMangaScraper {
 
     public override async FetchPages(chapter: Chapter): Promise<Page[]> {
         const images = await this.#drm.CreatePageLinks(new URL(chapter.Identifier, this.URI));
-        return images.map(page => new Page(this, chapter, new URL(page), { Referer: this.URI.href }));
+        const chapterReferer = new URL(chapter.Identifier, this.URI).href;
+        return images.map(page => new Page(this, chapter, new URL(page), { Referer: chapterReferer }));
     }
 
     public override async FetchImage(page: Page, priority: Priority, signal: AbortSignal): Promise<Blob> {
         const response = await this.imageTaskPool.Add(() => Fetch(new Request(page.Link, {
             headers: {
-                ...page.Link.href.endsWith('?v3') && { Origin: this.URI.origin },
+                ...(page.Link.href.endsWith('?v3') ? { Origin: this.URI.origin } : {}),
                 Referer: page.Parameters.Referer
             }
         })), priority, signal);
@@ -165,7 +182,6 @@ export default class extends DecoratableMangaScraper {
     }
 
     async #DecryptImage(encrypted: ArrayBuffer, key: number, limit: number, _algorithm: string = undefined): Promise<Blob> {
-        // TODO: Derive from algorithm type, is decryption even used ???
         const decryptions = [
             () => this.#DecryptWithXorShift32(encrypted, GetOdd(key), limit, true),
             () => this.#DecryptWithXorShift32(encrypted, key, limit, true),
@@ -178,7 +194,6 @@ export default class extends DecoratableMangaScraper {
         for (const decrypt of decryptions) {
             const blob = await Common.GetTypedData(decrypt());
             if (blob.type.startsWith('image/')) {
-                //console.log(this.Title, 'Detected Decryption:', _algorithm, decrypt);
                 return blob;
             }
         }
